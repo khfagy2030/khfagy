@@ -1,0 +1,41 @@
+{
+  "name": "khfagy",
+  "version": "1.0.0",
+  "description": "A bright navy session HUD for Claude Code: live activity pane, turn summary, status line, alerts and guardrails for secrets and destructive commands. English and Arabic.",
+  "license": "MIT",
+  "keywords": ["hud", "theme", "activity", "guardrails", "status-line", "arabic", "i18n"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "language": {
+      "type": "string",
+      "title": "Language",
+      "description": "Interface language: en (English) or ar (العربية)",
+      "default": "en",
+      "options": ["en", "ar"]
+    },
+    "theme": {
+      "type": "boolean",
+      "title": "Navy theme",
+      "description": "Apply the bright navy look in the desktop and mobile apps",
+      "default": true
+    },
+    "guardSecrets": {
+      "type": "boolean",
+      "title": "Protect secret files",
+      "description": "Block edits to .env files, private keys and credential files",
+      "default": true
+    },
+    "guardCommands": {
+      "type": "boolean",
+      "title": "Block destructive commands",
+      "description": "Block rm -rf on the root or home folder and force pushes",
+      "default": true
+    },
+    "slowTurnSeconds": {
+      "type": "number",
+      "title": "Slow turn alert (seconds)",
+      "description": "Show a toast when a turn takes longer than this. 0 turns it off.",
+      "default": 120
+    }
+  }
+}

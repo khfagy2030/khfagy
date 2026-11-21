@@ -1,0 +1,6 @@
+{
+  "name": "khfagy",
+  "owner": { "name": "khfagy" },
+  "description": "khfagy: a bright navy session HUD with activity pane, turn summary and guardrails for Claude Code.",
+  "plugins": [{ "name": "khfagy", "source": "./" }]
+}
