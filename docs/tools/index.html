@@ -112,7 +112,6 @@
     <div class="links">
       <a data-i="tNavHome" href="../">Home</a>
       <a data-i="tNavTools" class="on" href="./">Tools</a>
-      <a href="https://github.com/khfagy2030/khfagy">GitHub</a>
     </div>
   </div>
 </nav>
@@ -137,11 +136,13 @@
 <script>
 'use strict'
 const $ = (s, r = document) => r.querySelector(s)
+const T = (k, f) => (window.khT ? window.khT(k, f) : f)
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 const msg = (el, kind, text) => { el.className = 'msg ' + kind; el.textContent = text; el.hidden = false }
+const L = (en, vars = {}) => { let t = window.khT ? window.khT('u:' + en, en) : en; for (const [k, v] of Object.entries(vars)) t = t.split('{' + k + '}').join(v); return t }
 const copyBtn = (getText) => {
-  const b = document.createElement('button'); b.className = 'ghost'; b.textContent = 'Copy'
-  b.onclick = async () => { try { await navigator.clipboard.writeText(getText()); b.textContent = 'Copied ✓'; setTimeout(() => b.textContent = 'Copy', 1200) } catch { b.textContent = 'Copy failed' } }
+  const b = document.createElement('button'); b.className = 'ghost'; b.textContent = L('Copy')
+  b.onclick = async () => { try { await navigator.clipboard.writeText(getText()); b.textContent = L('Copied ✓'); setTimeout(() => b.textContent = L('Copy'), 1200) } catch { b.textContent = L('Copy failed') } }
   return b
 }
 const b64enc = str => { const bytes = new TextEncoder().encode(str); let bin = ''; bytes.forEach(x => bin += String.fromCharCode(x)); return btoa(bin) }
@@ -224,9 +225,9 @@ const TOOLS = [
           const line = text.slice(0, m.index).split('\n').length
           found.push({ kind, line, value: m[0].length > 14 ? m[0].slice(0, 6) + '…' + m[0].slice(-4) : m[0] })
         }
-        if (!text.trim()) return msg($('#m', p), 'warn', 'Paste something to scan.')
-        if (!found.length) { $('#res', p).innerHTML = ''; return msg($('#m', p), 'ok', '✓ No secrets found.') }
-        msg($('#m', p), 'bad', `⚠ ${found.length} possible secret${found.length > 1 ? 's' : ''} found. Remove them and rotate any real key.`)
+        if (!text.trim()) return msg($('#m', p), 'warn', L('Paste something to scan.'))
+        if (!found.length) { $('#res', p).innerHTML = ''; return msg($('#m', p), 'ok', L('✓ No secrets found.')) }
+        msg($('#m', p), 'bad', L('⚠ Possible secrets found: {n}. Remove them and rotate any real key.', { n: found.length }))
         $('#res', p).innerHTML = '<table class="res"><tr><th>Line</th><th>Type</th><th>Value</th></tr>' + found.sort((a, b) => a.line - b.line).map(f => `<tr><td>${f.line}</td><td>${esc(f.kind)}</td><td class="v">${esc(f.value)}</td></tr>`).join('') + '</table>'
       }
     } },
@@ -247,11 +248,11 @@ const TOOLS = [
             .map(w => (eco === 'npm' ? w.replace(/(.)@[^@/]*$/, '$1') : w.replace(/\[.*$/, '').replace(/[=<>!~;].*$/, '')).toLowerCase()).filter(Boolean)
         }
         names = [...new Set(names)]
-        if (!names.length) { $('#res', p).innerHTML = ''; return msg($('#m', p), 'warn', 'No package names found.') }
+        if (!names.length) { $('#res', p).innerHTML = ''; return msg($('#m', p), 'warn', L('No package names found.')) }
         const rows = names.map(n => ({ n, real: lookalikeOf(n, eco) }))
         const bad = rows.filter(r => r.real)
-        msg($('#m', p), bad.length ? 'bad' : 'ok', bad.length ? `⚠ ${bad.length} name${bad.length > 1 ? 's look' : ' looks'} like a fake copy of a popular package.` : `✓ ${names.length} name${names.length > 1 ? 's' : ''} checked, no look-alikes of popular packages.`)
-        $('#res', p).innerHTML = '<table class="res"><tr><th>Package</th><th>Result</th></tr>' + rows.map(r => `<tr><td class="v">${esc(r.n)}</td><td>${r.real ? `⚠ Looks like <b>${esc(r.real)}</b>. Did you mean that?` : '✓ OK'}</td></tr>`).join('') + '</table>'
+        msg($('#m', p), bad.length ? 'bad' : 'ok', bad.length ? L('⚠ Names that look like a fake copy of a popular package: {n}.', { n: bad.length }) : L('✓ Names checked: {n}. None looks like a copy of a popular package.', { n: names.length }))
+        $('#res', p).innerHTML = '<table class="res"><tr><th>Package</th><th>Result</th></tr>' + rows.map(r => `<tr><td class="v">${esc(r.n)}</td><td>${r.real ? L('⚠ Looks like {x}. Did you mean that?', { x: '<b>' + esc(r.real) + '</b>' }) : '✓ ' + L('OK')}</td></tr>`).join('') + '</table>'
       }
     } },
   { id: 'command', group: 'Security', icon: '⛔', name: 'Dangerous command checker',
@@ -261,10 +262,10 @@ const TOOLS = [
     init(p) {
       $('#go', p).onclick = () => {
         const lines = $('#in', p).value.split('\n').map(s => s.trim()).filter(Boolean)
-        if (!lines.length) return msg($('#m', p), 'warn', 'Paste a command to check.')
+        if (!lines.length) return msg($('#m', p), 'warn', L('Paste a command to check.'))
         const hits = []
         lines.forEach((l, i) => DESTRUCTIVE.forEach(([why, re]) => { if (re.test(l)) hits.push({ i: i + 1, l, why }) }))
-        msg($('#m', p), hits.length ? 'bad' : 'ok', hits.length ? `⚠ ${hits.length} risky command${hits.length > 1 ? 's' : ''}. Read them carefully before running.` : '✓ Nothing dangerous found. Still read commands before you run them.')
+        msg($('#m', p), hits.length ? 'bad' : 'ok', hits.length ? L('⚠ Risky commands: {n}. Read them carefully before running.', { n: hits.length }) : L('✓ Nothing dangerous found. Still read commands before you run them.'))
         $('#res', p).innerHTML = hits.length ? '<table class="res"><tr><th>Line</th><th>Risk</th><th>Command</th></tr>' + hits.map(h => `<tr><td>${h.i}</td><td>${esc(h.why)}</td><td class="v">${esc(h.l)}</td></tr>`).join('') + '</table>' : ''
       }
     } },
@@ -275,13 +276,13 @@ const TOOLS = [
     init(p) {
       $('#go', p).onclick = () => {
         const text = $('#in', p).value
-        if (!text.trim()) return msg($('#m', p), 'warn', 'Paste some text to check.')
+        if (!text.trim()) return msg($('#m', p), 'warn', L('Paste some text to check.'))
         const spans = []
         for (const re of INJECTION) for (const m of text.matchAll(re)) spans.push([m.index, m.index + m[0].length])
         spans.sort((a, b) => a[0] - b[0])
         const invisible = (text.match(/[​-‏‪-‮⁠-⁤﻿]/g) || []).length
-        if (!spans.length) { $('#out', p).hidden = $('#pl', p).hidden = true; return msg($('#m', p), 'ok', '✓ No instructions aimed at an AI found.') }
-        msg($('#m', p), 'bad', `⚠ ${spans.length} suspicious part${spans.length > 1 ? 's' : ''} found${invisible ? `, including ${invisible} invisible character${invisible > 1 ? 's' : ''}` : ''}. Do not let an AI agent act on this text.`)
+        if (!spans.length) { $('#out', p).hidden = $('#pl', p).hidden = true; return msg($('#m', p), 'ok', L('✓ No instructions aimed at an AI found.')) }
+        msg($('#m', p), 'bad', L('⚠ Suspicious parts found: {n}. Do not let an AI agent act on this text.', { n: spans.length }) + (invisible ? ' ' + L('Invisible characters: {n}.', { n: invisible }) : ''))
         let html = '', at = 0
         for (const [a, b] of spans) { if (a < at) continue; html += esc(text.slice(at, a)) + '<mark>' + (esc(text.slice(a, b)) || '⟦invisible⟧') + '</mark>'; at = b }
         $('#out', p).innerHTML = html + esc(text.slice(at)); $('#out', p).hidden = $('#pl', p).hidden = false
@@ -303,10 +304,10 @@ const TOOLS = [
           const rows = [['Algorithm', h.alg]]
           for (const k of ['iat', 'nbf', 'exp']) if (typeof pl[k] === 'number') rows.push([{ iat: 'Issued', nbf: 'Valid from', exp: 'Expires' }[k], new Date(pl[k] * 1000).toLocaleString()])
           $('#res', p).innerHTML = '<table class="res">' + rows.map(([k, v]) => `<tr><td class="k">${k}</td><td class="v">${esc(v)}</td></tr>`).join('') + '</table>'
-          if (h.alg === 'none') msg($('#m', p), 'bad', '⚠ alg is "none": this token is not signed.')
-          else if (typeof pl.exp === 'number' && pl.exp * 1000 < Date.now()) msg($('#m', p), 'warn', 'This token has expired.')
-          else msg($('#m', p), 'ok', '✓ Decoded. The signature is not checked here.')
-        } catch { $('#h', p).textContent = $('#pl', p).textContent = ''; msg($('#m', p), 'bad', 'This is not a valid JWT.') }
+          if (h.alg === 'none') msg($('#m', p), 'bad', L('⚠ alg is "none": this token is not signed.'))
+          else if (typeof pl.exp === 'number' && pl.exp * 1000 < Date.now()) msg($('#m', p), 'warn', L('This token has expired.'))
+          else msg($('#m', p), 'ok', L('✓ Decoded. The signature is not checked here.'))
+        } catch { $('#h', p).textContent = $('#pl', p).textContent = ''; msg($('#m', p), 'bad', L('This is not a valid JWT.')) }
       }
       $('#in', p).oninput = run
     } },
@@ -319,7 +320,7 @@ const TOOLS = [
     init(p) {
       const run = () => {
         const sets = [['#up', 'ABCDEFGHJKLMNPQRSTUVWXYZ'], ['#lo', 'abcdefghijkmnopqrstuvwxyz'], ['#nu', '23456789'], ['#sy', '!@#$%^&*-_=+?']].filter(([s]) => $(s, p).checked).map(([, c]) => c)
-        if (!sets.length) return ($('#out', p).textContent = 'Pick at least one set of characters.')
+        if (!sets.length) return ($('#out', p).textContent = L('Pick at least one set of characters.'))
         const all = sets.join(''), n = Math.min(128, Math.max(8, +$('#len', p).value || 24))
         const pick = (chars) => { const r = new Uint32Array(1); const lim = Math.floor(2 ** 32 / chars.length) * chars.length; do crypto.getRandomValues(r); while (r[0] >= lim); return chars[r[0] % chars.length] }
         const one = () => { let s = sets.map(pick).join(''); while (s.length < n) s += pick(all); return [...s].sort(() => { const r = new Uint32Array(1); crypto.getRandomValues(r); return r[0] / 2 ** 32 - .5 }).join('') }
@@ -350,11 +351,11 @@ const TOOLS = [
         if (!raw.trim()) return
         try {
           let v = JSON.parse(raw); if (mode === 'sort') v = sortKeys(v)
-          $('#out', p).textContent = JSON.stringify(v, null, mode === 'min' ? 0 : 2); msg($('#m', p), 'ok', '✓ Valid JSON')
+          $('#out', p).textContent = JSON.stringify(v, null, mode === 'min' ? 0 : 2); msg($('#m', p), 'ok', L('✓ Valid JSON'))
         } catch (e) {
           const pos = +((e.message.match(/position (\d+)/) || [])[1] ?? NaN)
           let where = ''
-          if (!isNaN(pos) && !/line \d/.test(e.message)) { const before = raw.slice(0, pos).split('\n'); where = ` (line ${before.length}, column ${before.at(-1).length + 1})` }
+          if (!isNaN(pos) && !/line \d/.test(e.message)) { const before = raw.slice(0, pos).split('\n'); where = ' (' + L('line {l}, column {c}', { l: before.length, c: before.at(-1).length + 1 }) + ')' }
           $('#out', p).textContent = ''; msg($('#m', p), 'bad', '✗ ' + e.message + where)
         }
       }
@@ -366,7 +367,7 @@ const TOOLS = [
     html: `<div class="cols"><div><label for="a">Text</label><textarea id="a"></textarea></div><div><label for="b">Base64</label><textarea id="b"></textarea></div></div><div id="m" class="msg" hidden></div>`,
     init(p) {
       $('#a', p).oninput = () => { $('#b', p).value = b64enc($('#a', p).value); $('#m', p).hidden = true }
-      $('#b', p).oninput = () => { try { $('#a', p).value = b64dec($('#b', p).value); $('#m', p).hidden = true } catch { msg($('#m', p), 'bad', 'This is not valid Base64 text.') } }
+      $('#b', p).oninput = () => { try { $('#a', p).value = b64dec($('#b', p).value); $('#m', p).hidden = true } catch { msg($('#m', p), 'bad', L('This is not valid Base64 text.')) } }
     } },
   { id: 'url', group: 'Data', icon: '🔗', name: 'URL encode / decode',
     desc: 'Percent-encode text for URLs, decode it, or split a URL into its parts.',
@@ -377,7 +378,7 @@ const TOOLS = [
           $('#res', p).innerHTML = '<table class="res">' + rows.map(([k, v]) => `<tr><td class="k">${esc(k)}</td><td class="v">${esc(v)}</td></tr>`).join('') + '</table>' } catch { $('#res', p).innerHTML = '' }
       }
       $('#a', p).oninput = () => { $('#b', p).value = encodeURIComponent($('#a', p).value); $('#m', p).hidden = true; parts($('#a', p).value) }
-      $('#b', p).oninput = () => { try { $('#a', p).value = decodeURIComponent($('#b', p).value.replace(/\+/g, ' ')); $('#m', p).hidden = true; parts($('#a', p).value) } catch { msg($('#m', p), 'bad', 'This text has a broken % code.') } }
+      $('#b', p).oninput = () => { try { $('#a', p).value = decodeURIComponent($('#b', p).value.replace(/\+/g, ' ')); $('#m', p).hidden = true; parts($('#a', p).value) } catch { msg($('#m', p), 'bad', L('This text has a broken % code.')) } }
     } },
   { id: 'time', group: 'Data', icon: '⏱️', name: 'Unix timestamp converter',
     desc: 'Convert Unix time (seconds or milliseconds) to a date, and a date to Unix time.',
@@ -390,11 +391,11 @@ const TOOLS = [
         const s = $('#in', p).value.trim(); if (!s) { $('#res', p).innerHTML = ''; $('#m', p).hidden = true; return }
         let d
         if (/^-?\d+(\.\d+)?$/.test(s)) { const n = +s; d = new Date(Math.abs(n) >= 1e11 ? n : n * 1000) } else d = new Date(s)
-        if (isNaN(d)) { $('#res', p).innerHTML = ''; return msg($('#m', p), 'bad', 'Could not read this as a date or timestamp.') }
+        if (isNaN(d)) { $('#res', p).innerHTML = ''; return msg($('#m', p), 'bad', L('Could not read this as a date or timestamp.')) }
         $('#m', p).hidden = true
         const diff = Math.round((d - Date.now()) / 1000), abs = Math.abs(diff)
-        const [v, u] = abs < 60 ? [abs, 'second'] : abs < 3600 ? [Math.round(abs / 60), 'minute'] : abs < 86400 ? [Math.round(abs / 3600), 'hour'] : [Math.round(abs / 86400), 'day']
-        const rows = [['Unix (s)', Math.floor(d / 1000)], ['Unix (ms)', +d], ['ISO 8601', d.toISOString()], ['UTC', d.toUTCString()], ['Your time', d.toString()], ['Relative', diff >= 0 ? `in ${v} ${u}${v === 1 ? '' : 's'}` : `${v} ${u}${v === 1 ? '' : 's'} ago`]]
+        const rtf = new Intl.RelativeTimeFormat(window.khLang ? window.khLang() : 'en', { numeric: 'auto' }), [v, u] = abs < 60 ? [diff, 'second'] : abs < 3600 ? [Math.round(diff / 60), 'minute'] : abs < 86400 ? [Math.round(diff / 3600), 'hour'] : [Math.round(diff / 86400), 'day']
+        const rows = [['Unix (s)', Math.floor(d / 1000)], ['Unix (ms)', +d], ['ISO 8601', d.toISOString()], ['UTC', d.toUTCString()], ['Your time', d.toLocaleString(window.khLang ? window.khLang() : undefined, { dateStyle: 'full', timeStyle: 'long' })], ['Relative', rtf.format(v, u)]]
         $('#res', p).innerHTML = '<table class="res">' + rows.map(([k, v]) => `<tr><td class="k">${k}</td><td class="v">${esc(v)}</td></tr>`).join('') + '</table>'
       }
       $('#in', p).oninput = run
@@ -422,8 +423,8 @@ const TOOLS = [
         let html = '', at = 0
         for (const m of ms) { if (m[0] === '') continue; html += esc(text.slice(at, m.index)) + '<mark>' + esc(m[0]) + '</mark>'; at = m.index + m[0].length }
         $('#out', p).innerHTML = html + esc(text.slice(at))
-        msg($('#m', p), ms.length ? 'ok' : 'warn', ms.length ? `${ms.length} match${ms.length > 1 ? 'es' : ''}` : 'No match')
-        if (ms.length && ms[0].length > 1) $('#res', p).innerHTML = '<table class="res"><tr><th>#</th>' + ms[0].slice(1).map((_, i) => `<th>Group ${i + 1}</th>`).join('') + '</tr>' + ms.slice(0, 50).map((m, i) => `<tr><td>${i + 1}</td>${m.slice(1).map(g => `<td class="v">${esc(g ?? '')}</td>`).join('')}</tr>`).join('') + '</table>'
+        msg($('#m', p), ms.length ? 'ok' : 'warn', ms.length ? L('Matches: {n}', { n: ms.length }) : L('No match'))
+        if (ms.length && ms[0].length > 1) $('#res', p).innerHTML = '<table class="res"><tr><th>#</th>' + ms[0].slice(1).map((_, i) => `<th>${esc(L('Group {n}', { n: i + 1 }))}</th>`).join('') + '</tr>' + ms.slice(0, 50).map((m, i) => `<tr><td>${i + 1}</td>${m.slice(1).map(g => `<td class="v">${esc(g ?? '')}</td>`).join('')}</tr>`).join('') + '</table>'
       }
       for (const id of ['#re', '#fl', '#in']) $(id, p).oninput = run
     } },
@@ -434,18 +435,18 @@ const TOOLS = [
     init(p) {
       $('#go', p).onclick = () => {
         const A = $('#a', p).value.split('\n'), B = $('#b', p).value.split('\n')
-        if (A.length * B.length > 4e6) return msg($('#m', p), 'warn', 'These texts are too long to compare here.')
+        if (A.length * B.length > 4e6) return msg($('#m', p), 'warn', L('These texts are too long to compare here.'))
         const key = s => $('#ws', p).checked ? s.replace(/\s+/g, ' ').trim() : s
-        const n = A.length, m = B.length, L = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1))
-        for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = key(A[i]) === key(B[j]) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1])
+        const n = A.length, m = B.length, LCS = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1))
+        for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) LCS[i][j] = key(A[i]) === key(B[j]) ? LCS[i + 1][j + 1] + 1 : Math.max(LCS[i + 1][j], LCS[i][j + 1])
         let i = 0, j = 0, html = '', add = 0, del = 0
         while (i < n || j < m) {
           if (i < n && j < m && key(A[i]) === key(B[j])) { html += '  ' + esc(B[j]) + '\n'; i++; j++ }
-          else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) { html += `<span class="add">+ ${esc(B[j])}</span>`; j++; add++ }
+          else if (j < m && (i >= n || LCS[i][j + 1] >= LCS[i + 1][j])) { html += `<span class="add">+ ${esc(B[j])}</span>`; j++; add++ }
           else { html += `<span class="del">- ${esc(A[i])}</span>`; i++; del++ }
         }
         $('#out', p).innerHTML = html
-        msg($('#m', p), add || del ? 'warn' : 'ok', add || del ? `${add} line${add === 1 ? '' : 's'} added, ${del} removed` : '✓ The texts are the same')
+        msg($('#m', p), add || del ? 'warn' : 'ok', add || del ? L('Lines added: {a}, removed: {d}', { a: add, d: del }) : L('✓ The texts are the same'))
       }
     } },
   { id: 'case', group: 'Text', icon: 'Aa', name: 'Case converter',
@@ -478,7 +479,7 @@ const TOOLS = [
       const B = { dec: [10, /^-?\d+$/], hex: [16, /^-?(0x)?[0-9a-f]+$/i], bin: [2, /^-?(0b)?[01]+$/i], oct: [8, /^-?(0o)?[0-7]+$/i] }
       for (const [id, [base, ok]] of Object.entries(B)) $('#' + id, p).oninput = () => {
         let s = $('#' + id, p).value.trim().replace(/[_\s]/g, ''); if (!s) return
-        if (!ok.test(s)) return msg($('#m', p), 'bad', `Not a valid ${id === 'dec' ? 'decimal' : id === 'hex' ? 'hex' : id === 'bin' ? 'binary' : 'octal'} number.`)
+        if (!ok.test(s)) return msg($('#m', p), 'bad', L('This is not a valid number in this base.'))
         $('#m', p).hidden = true
         const neg = s.startsWith('-'); s = s.replace(/^-/, '').replace(/^0[xbo]/i, '')
         let v = 0n; for (const c of s.toLowerCase()) v = v * BigInt(base) + BigInt(parseInt(c, base))
@@ -502,9 +503,9 @@ const TOOLS = [
         if ((m = s.match(/^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/))) return m.slice(1, 4).map(Number).map(x => Math.min(255, x))
         if ((m = s.match(/^hsla?\(\s*([\d.]+)[\s,]+([\d.]+)%?[\s,]+([\d.]+)%?/))) return hsl2rgb(+m[1], +m[2], +m[3]) }
       const run = (s) => {
-        const c = parse(s); if (!c) { $('#res', p).innerHTML = ''; return msg($('#m', p), 'bad', 'Could not read this color.') }
-        $('#m', p).hidden = true; const [r, g, b] = c, hex = toHex(r, g, b), [h, sl, l] = rgb2hsl(r, g, b), L = lum(r, g, b)
-        const cw = (1.05 / (L + .05)).toFixed(2), cb = ((L + .05) / .05).toFixed(2), grade = x => x >= 7 ? 'AAA' : x >= 4.5 ? 'AA' : x >= 3 ? 'AA large text' : 'fails'
+        const c = parse(s); if (!c) { $('#res', p).innerHTML = ''; return msg($('#m', p), 'bad', L('Could not read this color.')) }
+        $('#m', p).hidden = true; const [r, g, b] = c, hex = toHex(r, g, b), [h, sl, l] = rgb2hsl(r, g, b), lumV = lum(r, g, b)
+        const cw = (1.05 / (lumV + .05)).toFixed(2), cb = ((lumV + .05) / .05).toFixed(2), grade = x => x >= 7 ? 'AAA' : x >= 4.5 ? 'AA' : x >= 3 ? L('AA large text') : L('fails')
         $('#sw', p).style.background = hex; $('#pick', p).value = hex
         $('#res', p).innerHTML = '<table class="res">' + [['HEX', hex], ['RGB', `rgb(${c.map(Math.round).join(', ')})`], ['HSL', `hsl(${h}, ${sl}%, ${l}%)`], ['Contrast with white text', `${cw} : 1 (${grade(cw)})`], ['Contrast with black text', `${cb} : 1 (${grade(cb)})`]].map(([k, v]) => `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`).join('') + '</table>'
       }
@@ -524,20 +525,31 @@ const drawList = (q = '') => {
   list.innerHTML = html || `<div class="group">${esc(T('tNone', 'No tool found'))}</div>`; mark()
 }
 const mark = () => { const id = location.hash.slice(1) || TOOLS[0].id; list.querySelectorAll('a.tool').forEach(a => a.classList.toggle('on', a.dataset.id === id)) }
+const SKIP = 'pre, textarea, td.v, #th, #td, #tn, select#eco'
+const uiText = (root) => {
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let n; (n = w.nextNode());) {
+    if (n.parentElement.closest(SKIP)) continue
+    if (n.khEn === undefined) n.khEn = n.data
+    const core = n.khEn.trim(); if (!core) continue
+    const t = T('u:' + core, core)
+    n.data = n.khEn.replace(core, t)
+  }
+}
+new MutationObserver(() => uiText(panel)).observe(panel, { childList: true, subtree: true })
 const open = () => {
   const t = TOOLS.find(x => x.id === location.hash.slice(1)) || TOOLS[0]
   panel.innerHTML = `<h2 id="th"></h2><p class="desc" id="td"></p>${t.html}<div class="note" id="tn"></div>`
   t.init(panel); mark(); words(t)
   if (innerWidth <= 860 && location.hash) panel.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
-const T = (k, f) => (window.khT ? window.khT(k, f) : f)
 const words = (t = TOOLS.find(x => x.id === location.hash.slice(1)) || TOOLS[0]) => {
   $('#th').textContent = `${t.icon} ${T('n_' + t.id, t.name)}`
   $('#td').textContent = T('d_' + t.id, t.desc)
   $('#tn').innerHTML = `🔒 <b>${esc(T('tPrivate', 'Private:'))}</b> ${esc(T('tPrivateText', 'this tool runs only in your browser. Nothing you paste is sent anywhere.'))}${t.group === 'Security' ? ` <a href="../">${esc(T('tUseKh', 'Using Claude Code? khfagy runs these checks for you automatically, before anything goes wrong.'))}</a>` : ''}`
   document.title = `${T('n_' + t.id, t.name)} · ${T('tH1', 'Free developer tools')} · khfagy`
 }
-addEventListener('kh-lang', () => { drawList($('#search').value); if ($('#th')) words() })
+addEventListener('kh-lang', () => { drawList($('#search').value); if ($('#th')) { words(); uiText(panel) } })
 $('#search').oninput = e => drawList(e.target.value)
 addEventListener('hashchange', open)
 drawList(); open()
