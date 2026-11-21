@@ -2,7 +2,7 @@
 
 **The safety net for Claude Code.** Undo any change Claude made with one command. Keep your keys away from the model. Stop the commands that wreck a project. And see exactly what Claude did, how long it took and how many tokens it used.
 
-Available in 25 languages. Website: [khfagy2030.github.io/khfagy](https://khfagy2030.github.io/khfagy/)
+Available in 25 languages. Website: [khfagy.com](https://khfagy.com)
 
 ## Why khfagy
 
