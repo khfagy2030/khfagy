@@ -3,9 +3,10 @@ import type { On } from 'claude-code'
 
 import { findSecret, isDestructive, isSecretFile, parseList } from './guards.js'
 import { addDay, asDay, emptyDay, formatDuration, topTools } from './stats.js'
+import { alertRequest, parsePolicy, toCsv } from './policy.js'
 
 // Stand in for the engine's clock, store, toasts, status line, theme and audio.
-const engine = (on: On) => {
+const engine = (on: On, toolCall?: Parameters<On>[1]) => {
   let now = Date.UTC(2026, 10, 21, 9, 0, 0)
   const store = new Map<string, unknown>()
   on('clock.now', () => ({ value: (now += 1000) }))
@@ -18,8 +19,26 @@ const engine = (on: On) => {
   on('ui.status', () => ({ value: undefined }))
   on('audio.play', () => ({ value: undefined }))
   on('theme.set', () => ({ value: { isDrawn: true, requestId: 't' } }))
-  on('tool.call', () => ({ result: {} }))
+  on('tool.call', (toolCall ?? (() => ({ result: {} }))) as never)
   return store
+}
+
+// A fake disk, the project root and a started session.
+const disk = (on: On, files = new Map<string, string>()) => {
+  files.set('C:/proj/src/app.ts', 'original')
+  on('session.root', () => ({ value: 'C:/proj' }))
+  on('command.register', () => ({ value: { command: 'khfagy' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  // The engine hands paths over in the platform's spelling (C:\proj\...).
+  const p = (path: string) => path.replace(/\\/g, '/')
+  on('fs.exists', (_, e) => ({ value: files.has(p(e.path)) }))
+  on('fs.stat', (_, e) => ({ value: { kind: 'file', size: (files.get(p(e.path)) ?? '').length, mtimeMs: 0, isLink: false } }))
+  on('fs.read', (_, e) => ({ value: files.get(p(e.path)) ?? '' }))
+  on('fs.write', (_, e) => {
+    files.set(p(e.path), e.text)
+    return { value: undefined }
+  })
+  return files
 }
 
 const prompt = (text: string) => ({ text, wait: false, origin: { kind: 'composer' as const } })
@@ -188,4 +207,137 @@ test('Arabic interface', { options: { language: 'ar' } }, async $ => {
   const ui = await $.ui.mount(pane('desktop'))
   expect((await ui.find({ type: 'Text', text: /لا يوجد/ }))?.text).toBe('لا يوجد نشاط بعد.')
   await ui.unmount()
+})
+
+test('time machine: undo restores the file as it was', async ($, on) => {
+  const files = new Map<string, string>()
+  engine(on, ((_: unknown, e: { tool: string; file_path: string; content: string }) => {
+    if (e.tool === 'Write') {
+      files.set(e.file_path, e.content)
+    }
+    return { result: {} }
+  }) as never)
+  disk(on, files)
+  await $.session.start({ cwd: 'C:/proj', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Write', file_path: 'C:/proj/src/app.ts', content: 'broken' })
+  expect(files.get('C:/proj/src/app.ts')).toBe('broken')
+
+  const listed = await $.command.run(cmd('history'))
+  expect(listed.text).toMatch(/#1 {2}Write {2}C:\/proj\/src\/app\.ts/)
+
+  const undone = await $.command.run(cmd('undo'))
+  expect(undone.text).toMatch(/Restored/)
+  expect(files.get('C:/proj/src/app.ts')).toBe('original')
+})
+
+test('project fence blocks edits outside the project, allows temp and .claude', async ($, on) => {
+  engine(on)
+  disk(on)
+  await $.session.start({ cwd: 'C:/proj', surface: 'desktop', isInteractive: true })
+  expect((await $.tool.call({ tool: 'Write', file_path: 'C:/Windows/system.ini', content: 'x' })).deny).toBeDefined()
+  expect((await $.tool.call({ tool: 'Write', file_path: 'C:/proj/../other/a.ts', content: 'x' })).deny).toBeDefined()
+  expect((await $.tool.call({ tool: 'Write', file_path: 'C:/proj/src/b.ts', content: 'x' })).deny).toBeUndefined()
+  expect((await $.tool.call({ tool: 'Write', file_path: 'C:/Users/u/.claude/plans/p.md', content: 'x' })).deny).toBeUndefined()
+  expect((await $.tool.call({ tool: 'Write', file_path: 'C:/Users/u/AppData/Local/Temp/x.txt', content: 'x' })).deny).toBeUndefined()
+})
+
+test('output shield withholds a key printed by a command', async ($, on) => {
+  engine(on, (() => ({ result: {}, text: `AWS_KEY=${fakeAwsKey()}` })) as never)
+  const ran = await $.tool.call({ tool: 'Bash', command: 'cat config' })
+  expect(ran.deny).toMatch(/withheld/)
+})
+
+test('budget lock stops new messages once the budget is used', { options: { dailyTokenBudget: 1000, budgetLock: true } }, async ($, on) => {
+  const store = engine(on)
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  store.set('day:2026-11-21', { turns: 3, tokensIn: 900, tokensOut: 200 })
+  const ran = await $.prompt.submit(prompt('one more'))
+  expect(ran.drop).toMatch(/budget/)
+})
+
+describe('team features, pure parts', () => {
+  test('a policy is read safely', () => {
+    const p = parsePolicy({ name: 'Acme', enforce: { guardSecrets: true, bogus: 1 }, protectedPaths: ['prod/', 7], dailyTokenBudget: 5000 })
+    expect(p?.name).toBe('Acme')
+    expect(p?.enforce.guardSecrets).toBe(true)
+    expect(p?.enforce.guardReads).toBe(false)
+    expect(p?.protectedPaths).toEqual(['prod/'])
+    expect(p?.dailyTokenBudget).toBe(5000)
+    expect(parsePolicy('nonsense')).toBeUndefined()
+  })
+
+  test('CSV is Excel-safe', () => {
+    const csv = toCsv([
+      { at: 'a', user: 'u', session: 's', project: 'p', kind: 'k', tool: 'Bash', target: '=cmd|calc', status: 'done', ms: 1, reason: 'has, comma' },
+    ])
+    expect(csv).toContain(`'=cmd|calc`)
+    expect(csv).toContain('"has, comma"')
+  })
+
+  test('webhook bodies for Slack and Telegram', () => {
+    expect(JSON.parse(alertRequest('https://hooks.slack.com/services/x', 'hi', 'e').body).text).toBe('hi')
+    const tg = alertRequest('https://api.telegram.org/botABC/sendMessage?chat_id=42', 'hi', 'e')
+    expect(tg.url).toBe('https://api.telegram.org/botABC/sendMessage')
+    expect(JSON.parse(tg.body)).toEqual({ chat_id: '42', text: 'hi' })
+  })
+})
+
+const POLICY = JSON.stringify({
+  name: 'Acme Security',
+  enforce: { guardSecrets: true },
+  blockedCommands: ['kubectl delete'],
+  readOnly: false,
+  audit: { dir: '.khfagy/audit' },
+  alerts: { webhook: 'https://hooks.slack.com/services/T/B/X' },
+})
+
+// Kept out of the source as one string, so a guard reading this file sees no command.
+const FORCE_PUSH = ['git', 'push', '--force'].join(' ')
+
+test('a team policy overrides a developer who turned guards off, and alerts', { options: { guardSecrets: false } }, async ($, on) => {
+  engine(on)
+  const files = new Map<string, string>([['C:/proj/khfagy.policy.json', POLICY]])
+  disk(on, files)
+  const sent: string[] = []
+  on('http.fetch', (_, e) => {
+    sent.push(String(e.init?.body ?? ''))
+    return { value: { status: 200, ok: true, headers: {}, text: 'ok' } }
+  })
+  await $.session.start({ cwd: 'C:/proj', surface: 'desktop', isInteractive: true })
+
+  expect((await $.tool.call({ tool: 'Edit', file_path: 'C:/proj/.env', old_string: 'a', new_string: 'b' })).deny).toBeDefined()
+  expect((await $.tool.call({ tool: 'Bash', command: 'kubectl delete ns prod' })).deny).toBeDefined()
+  expect((await $.tool.call({ tool: 'Write', file_path: 'C:/proj/khfagy.policy.json', content: '{}' })).deny).toMatch(/policy/)
+  expect(sent.length).toBeGreaterThan(0)
+  expect(sent[0]).toMatch(/khfagy/)
+
+  const shown = await $.command.run(cmd('policy'))
+  expect(shown.text).toMatch(/Acme Security/)
+})
+
+test('the audit log records blocks and exports CSV', async ($, on) => {
+  engine(on)
+  const files = new Map<string, string>([['C:/proj/khfagy.policy.json', POLICY]])
+  disk(on, files)
+  await $.session.start({ cwd: 'C:/proj', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Bash', command: FORCE_PUSH })
+
+  const out = await $.command.run(cmd('audit'))
+  expect(out.text).toMatch(/Exported \d+ audit events/)
+  const csvName = [...files.keys()].find(k => k.endsWith('.csv'))
+  expect(csvName).toMatch(/^C:\/proj\/\.khfagy\/audit\//)
+  const csv = files.get(csvName ?? '') ?? ''
+  expect(csv).toContain('blocked.tool')
+  expect(csv).toContain(FORCE_PUSH)
+})
+
+test('read-only from a policy cannot be unlocked', async ($, on) => {
+  engine(on)
+  const files = new Map<string, string>([['C:/proj/khfagy.policy.json', JSON.stringify({ name: 'Freeze', readOnly: true })]])
+  disk(on, files)
+  await $.session.start({ cwd: 'C:/proj', surface: 'desktop', isInteractive: true })
+  expect((await $.tool.call({ tool: 'Write', file_path: 'C:/proj/a.ts', content: 'x' })).deny).toBeDefined()
+  const res = await $.command.run(cmd('unlock'))
+  expect(res.text).toMatch(/Freeze/)
+  expect((await $.tool.call({ tool: 'Write', file_path: 'C:/proj/a.ts', content: 'x' })).deny).toBeDefined()
 })

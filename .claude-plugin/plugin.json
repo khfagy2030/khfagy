@@ -1,7 +1,7 @@
 {
   "name": "khfagy",
-  "version": "2.0.0",
-  "description": "A pro safety and insight layer for Claude Code: secret shield for prompts and files, destructive-command guard, review mode, live activity pane, turn history, daily and weekly stats, done sound and a bright navy theme. English and Arabic.",
+  "version": "2.2.0",
+  "description": "The safety net for Claude Code and for teams: undo any change Claude made, secret shields, project fence, destructive-command guard, enforced team policies, audit log with CSV export, Slack/Teams/Telegram alerts, token budget, review mode and reports. English and Arabic.",
   "license": "MIT",
   "keywords": ["security", "secrets", "guardrails", "review-mode", "activity", "stats", "theme", "arabic", "i18n"],
   "types": "./types/index.d.ts",
@@ -54,6 +54,55 @@
       "title": "Extra blocked commands",
       "description": "Comma-separated text that blocks any shell command containing it. Example: terraform destroy, kubectl delete",
       "default": ""
+    },
+    "guardOutputs": {
+      "type": "boolean",
+      "title": "Hide secrets in tool output",
+      "description": "Withhold a command's output or a file's text from Claude when it contains an API key, token or private key",
+      "default": true
+    },
+    "guardProjectFence": {
+      "type": "boolean",
+      "title": "Project fence",
+      "description": "Block edits outside the project folder (temp folders and .claude folders stay allowed)",
+      "default": true
+    },
+    "allowedPaths": {
+      "type": "string",
+      "title": "Allowed folders",
+      "description": "Comma-separated folders outside the project that Claude may edit. Example: D:/shared/config, C:/work/lib",
+      "default": ""
+    },
+    "timeMachine": {
+      "type": "boolean",
+      "title": "Time machine",
+      "description": "Keep each file as it was before Claude changed it, so /khfagy undo can restore it",
+      "default": true
+    },
+    "dailyTokenBudget": {
+      "type": "number",
+      "title": "Daily token budget",
+      "description": "Warn at 80% and 100% of this many tokens a day. 0 turns it off.",
+      "default": 0
+    },
+    "budgetLock": {
+      "type": "boolean",
+      "title": "Stop at budget",
+      "description": "Stop sending messages once the daily token budget is used up",
+      "default": false
+    },
+    "auditLog": {
+      "type": "boolean",
+      "title": "Audit log",
+      "description": "Record every tool call and every block, by day, under ~/.claude/khfagy/audit (/khfagy audit exports CSV)",
+      "default": true
+    },
+    "alertWebhook": {
+      "type": "string",
+      "title": "Alert webhook",
+      "description": "Slack, Teams, Discord or Telegram (https://api.telegram.org/bot<token>/sendMessage?chat_id=<id>) webhook to notify when a guard blocks something",
+      "default": "",
+      "sensitive": true
     },
     "soundOnDone": {
       "type": "boolean",

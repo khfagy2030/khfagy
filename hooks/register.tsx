@@ -1,7 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { Register, ThemeSetArgs } from 'claude-code'
 
-import type { Activity, SessionTotals, TurnSummary } from '../types'
+import type { Activity, SessionTotals, Snapshot, TurnSummary } from '../types'
+import { exportAudit, loadPolicy, resolveSecretRef, sendAlert, writeAudit } from './effects.js'
+import { historyDir, isAllowedPlace } from './fence.js'
+import type { AuditEvent, Policy } from './policy.js'
+import { POLICY_FILE } from './policy.js'
 import { findSecret, isDestructive, isSecretFile, parseList } from './guards.js'
 import type { Lang } from './i18n.js'
 import { strings } from './i18n.js'
@@ -22,6 +26,7 @@ const totals = atom(
 )
 const isBandHidden = atom({ plugin: 'khfagy', key: 'isBandHidden' } as const, false)
 const isLocked = atom({ plugin: 'khfagy', key: 'isLocked' } as const, false)
+const history = atom({ plugin: 'khfagy', key: 'history' } as const, [], { shape: 'history-1' })
 
 // Bright navy: sea spray by day, lit harbour by night.
 const { theme, problems } = makeColors({
@@ -88,24 +93,117 @@ export const register: Register = (on, options) => {
   const lang: Lang = options.language === 'ar' ? 'ar' : 'en'
   const t = strings(lang)
   const useTheme = options.theme !== false
-  const guardSecrets = options.guardSecrets !== false
-  const guardReads = options.guardReads !== false
-  const guardCommands = options.guardCommands !== false
-  const guardPrompts = options.guardPrompts !== false
   const soundOnDone = options.soundOnDone !== false
   const slowAfter = typeof options.slowTurnSeconds === 'number' ? options.slowTurnSeconds : 120
-  const extraFiles = parseList(options.protectedPaths)
-  const extraCommands = parseList(options.blockedCommands)
+  const keepAudit = options.auditLog !== false
+  // What a team policy may tighten at session start.
+  let guardSecrets = options.guardSecrets !== false
+  let guardReads = options.guardReads !== false
+  let guardCommands = options.guardCommands !== false
+  let guardPrompts = options.guardPrompts !== false
+  let guardOutputs = options.guardOutputs !== false
+  let guardFence = options.guardProjectFence !== false
+  let keepHistory = options.timeMachine !== false
+  let extraFiles = parseList(options.protectedPaths)
+  let extraCommands = parseList(options.blockedCommands)
+  let allowedPlaces = parseList(options.allowedPaths)
+  let budget = typeof options.dailyTokenBudget === 'number' ? options.dailyTokenBudget : 0
+  let budgetLock = options.budgetLock === true
 
   // This turn, in memory; written to the store when the turn ends.
   let turn: DayStats = emptyDay()
+  let projectRoot: string | undefined
+  let histDir = ''
+  let budgetWarned = ''
+  let policy: Policy | undefined
+  let auditDir = ''
+  let alertUrl = ''
+  let user = ''
+  let sessionId = ''
+  const pending: AuditEvent[] = []
+  const lastAlert = new Map<string, number>()
+
+  const note = (at: number, kind: string, fields: Partial<AuditEvent> = {}) => {
+    if (auditDir === '') {
+      return
+    }
+    pending.push({
+      at: new Date(at).toISOString(),
+      user,
+      session: sessionId,
+      project: projectRoot ?? '',
+      kind,
+      tool: '',
+      target: '',
+      status: '',
+      ms: 0,
+      reason: '',
+      ...fields,
+    })
+  }
+
+  // Alerts: one per kind every 20 seconds at most.
+  const shouldAlert = (kind: string, now: number) => {
+    if (alertUrl === '' || now - (lastAlert.get(kind) ?? 0) < 20_000) {
+      return false
+    }
+    lastAlert.set(kind, now)
+    return true
+  }
 
   on('session.start', async ($, e, next) => {
+    try {
+      projectRoot = await $.session.root()
+    } catch {
+      projectRoot = e.cwd
+    }
+    const now = await $.clock.now()
+    histDir = `${historyDir($.plugin.root, e.cwd)}/${new Date(now).toISOString().replace(/[:.]/g, '-')}`
+    try {
+      sessionId = await $.session.id()
+      user = (await $.env.get('USERNAME')) ?? (await $.env.get('USER')) ?? ''
+    } catch {
+      // identity is best effort
+    }
+
+    policy = projectRoot === undefined ? undefined : await loadPolicy($, projectRoot)
+    if (policy !== undefined) {
+      const p = policy
+      guardPrompts ||= p.enforce.guardPrompts
+      guardSecrets ||= p.enforce.guardSecrets
+      guardReads ||= p.enforce.guardReads
+      guardCommands ||= p.enforce.guardCommands
+      guardOutputs ||= p.enforce.guardOutputs
+      guardFence ||= p.enforce.guardProjectFence
+      keepHistory ||= p.enforce.timeMachine
+      extraFiles = [...extraFiles, ...p.protectedPaths]
+      extraCommands = [...extraCommands, ...p.blockedCommands]
+      allowedPlaces = [...allowedPlaces, ...p.allowedPaths]
+      if (p.dailyTokenBudget > 0) {
+        budget = p.dailyTokenBudget
+        budgetLock = p.budgetLock
+      }
+      if (p.readOnly) {
+        await update($, isLocked, () => true)
+      }
+    }
+
+    const base = historyDir($.plugin.root, e.cwd).replace(/\/history$/, '')
+    auditDir =
+      policy !== undefined && policy.auditDir !== '' && projectRoot !== undefined
+        ? `${projectRoot.replace(/[\\/]+$/, '')}/${policy.auditDir}`
+        : keepAudit
+          ? `${base}/audit`
+          : ''
+    const hook = policy !== undefined && policy.alertWebhook !== '' ? policy.alertWebhook : String(options.alertWebhook ?? '')
+    alertUrl = hook === '' ? '' : await resolveSecretRef($, hook)
+
     if (useTheme && problems.every(line => !line.startsWith("Desktop won't paint"))) {
       await $.theme.set(LOOK)
     }
     await $.command.register({ name: 'khfagy', description: t.commandDesc })
-    $.ui.toast(t.ready)
+    $.ui.toast(policy !== undefined ? t.readyPolicy(policy.name) : t.ready)
+    note(now, 'session.start', { reason: policy !== undefined ? `policy: ${policy.name}` : '' })
 
     return next(e)
   })
@@ -144,13 +242,97 @@ export const register: Register = (on, options) => {
     if (arg === 'help') {
       return { text: t.help }
     }
+    if (arg === 'policy') {
+      if (policy === undefined) {
+        return { text: t.policyNone(POLICY_FILE) }
+      }
+      const enforced = Object.entries(policy.enforce)
+        .filter(([, v]) => v)
+        .map(([k]) => k)
+      return {
+        text: [
+          t.policyTitle(policy.name),
+          `  ${t.policyEnforced}: ${enforced.length > 0 ? enforced.join(', ') : t.none}`,
+          `  ${t.policyProtected}: ${policy.protectedPaths.join(', ') || t.none}`,
+          `  ${t.policyBlocked}: ${policy.blockedCommands.join(', ') || t.none}`,
+          `  ${t.policyBudget}: ${policy.dailyTokenBudget > 0 ? formatTokens(policy.dailyTokenBudget) : t.none}`,
+          `  ${t.policyReadOnly}: ${policy.readOnly ? '✓' : '—'}`,
+          `  ${t.policyAudit}: ${auditDir || t.none}`,
+          `  ${t.policyAlerts}: ${alertUrl !== '' ? '✓' : '—'}`,
+        ].join('\n'),
+      }
+    }
+    if (arg === 'audit') {
+      if (auditDir === '') {
+        return { text: t.auditOff }
+      }
+      if (pending.length > 0) {
+        await writeAudit($, auditDir, pending.splice(0))
+      }
+      const now = await $.clock.now()
+      const days = [6, 5, 4, 3, 2, 1, 0].map(i => new Date(now - i * DAY_MS).toISOString().slice(0, 10))
+      const out = await exportAudit($, auditDir, days)
+      return { text: t.auditExported(out.count, out.file) }
+    }
+    if (arg === 'history') {
+      const list = await read($, history)
+      if (list.length === 0) {
+        return { text: t.historyEmpty }
+      }
+      return {
+        text: [
+          t.historyTitle,
+          ...list
+            .slice(-30)
+            .reverse()
+            .map(x => `  #${x.seq}  ${x.tool}  ${x.path}${x.existed ? '' : `  (${t.created})`}${x.isRestored ? `  ✓ ${t.restored}` : ''}`),
+          '',
+          t.historyHint,
+        ].join('\n'),
+      }
+    }
+    if (arg === 'undo' || arg.startsWith('undo ')) {
+      const list = await read($, history)
+      const wanted = Number(arg.slice(4).trim())
+      const snap =
+        arg === 'undo'
+          ? [...list].reverse().find(x => !x.isRestored)
+          : list.find(x => x.seq === wanted)
+      if (snap === undefined) {
+        return { text: t.undoNothing }
+      }
+      if (!snap.existed) {
+        return { text: t.undoCreated(snap.path) }
+      }
+      await $.fs.write(snap.path, await $.fs.read(snap.file))
+      await update($, history, all => all.map(x => (x.seq === snap.seq ? { ...x, isRestored: true } : x)))
+      note(await $.clock.now(), 'undo', { target: snap.path, reason: `restored #${snap.seq}` })
+      $.ui.toast(t.undone(snap.path))
+      return { text: t.undone(snap.path) }
+    }
+    if (arg === 'budget') {
+      const now = await $.clock.now()
+      const today = addDay(asDay(await $.store.get(dayKey(now))), turn)
+      const used = today.tokensIn + today.tokensOut
+      return {
+        text:
+          budget > 0
+            ? t.budgetStatus(formatTokens(used), formatTokens(budget), Math.round((used / budget) * 100))
+            : t.budgetOff(formatTokens(used)),
+      }
+    }
     if (arg === 'lock') {
       await update($, isLocked, () => true)
+      note(await $.clock.now(), 'lock')
       $.ui.toast(t.locked)
       return { text: t.locked }
     }
     if (arg === 'unlock') {
+      if (policy?.readOnly === true) {
+        return { text: t.unlockPolicy(policy.name) }
+      }
       await update($, isLocked, () => false)
+      note(await $.clock.now(), 'unlock')
       return { text: t.unlocked }
     }
     if (arg === 'stats') {
@@ -189,8 +371,23 @@ export const register: Register = (on, options) => {
     if (guardPrompts && e.command === undefined) {
       const kind = findSecret(e.text)
       if (kind !== undefined) {
+        const now = await $.clock.now()
         $.ui.toast(t.blockedPrompt(kind))
+        note(now, 'blocked.prompt', { status: 'blocked', reason: kind })
+        if (shouldAlert('prompt', now)) {
+          void sendAlert($, alertUrl, t.alert(user, projectRoot ?? '', t.alertPrompt(kind)), 'blocked.prompt')
+        }
+        if (auditDir !== '' && pending.length > 0) {
+          await writeAudit($, auditDir, pending.splice(0)).catch(() => undefined)
+        }
         return { drop: t.blockedPrompt(kind) }
+      }
+    }
+    if (budgetLock && budget > 0 && e.command === undefined && e.turnId === undefined) {
+      const today = asDay(await $.store.get(dayKey(await $.clock.now())))
+      if (today.tokensIn + today.tokensOut >= budget) {
+        $.ui.toast(t.budgetLocked(formatTokens(budget)))
+        return { drop: t.budgetLocked(formatTokens(budget)) }
       }
     }
     const ran = await next(e)
@@ -219,9 +416,37 @@ export const register: Register = (on, options) => {
         reason = t.blockedCmd(short(command))
       }
     }
+    const isChange = e.tool === 'Edit' || e.tool === 'Write' || e.tool === 'NotebookEdit'
+    if (reason === undefined && isChange && path !== undefined && policy !== undefined) {
+      if (path.replace(/\\/g, '/').toLowerCase().endsWith(`/${POLICY_FILE}`)) {
+        reason = t.blockedPolicyFile
+      }
+    }
+    if (reason === undefined && guardFence && isChange && path !== undefined) {
+      if (!isAllowedPlace(path, projectRoot, allowedPlaces)) {
+        reason = t.blockedFence(path)
+      }
+    }
     const denied = reason === undefined ? undefined : { deny: `khfagy: ${reason}` }
     if (reason !== undefined) {
       $.ui.toast(reason)
+    }
+
+    // Time machine: keep the file as it was before Claude changes it.
+    if (denied === undefined && keepHistory && isChange && path !== undefined && histDir !== '') {
+      try {
+        const existed = await $.fs.exists(path)
+        const size = existed ? (await $.fs.stat(path)).size : 0
+        if (size <= 2 * 1024 * 1024) {
+          const seq = (await read($, history)).reduce((m, x) => Math.max(m, x.seq), 0) + 1
+          const file = `${histDir}/${seq}.snap`
+          await $.fs.write(file, existed ? await $.fs.read(path) : '')
+          const snap: Snapshot = { seq, path, tool: e.tool, existed, file, at: await $.clock.now(), isRestored: false }
+          await update($, history, list => [...list, snap].slice(-200))
+        }
+      } catch {
+        // a snapshot that cannot be taken never blocks the change
+      }
     }
 
     // Activity log: a logging failure never blocks or breaks the call.
@@ -234,12 +459,35 @@ export const register: Register = (on, options) => {
       // keep going
     }
 
-    const ran = denied ?? (await next(e))
+    let ran = denied ?? (await next(e))
+
+    // Output shield: a key printed by a command or found in a file never reaches the model.
+    if (guardOutputs && ran.deny === undefined && typeof ran.text === 'string') {
+      const kind = findSecret(ran.text)
+      if (kind !== undefined) {
+        $.ui.toast(t.withheldOutput(e.tool, kind))
+        ran = { deny: `khfagy: ${t.withheldOutput(e.tool, kind)}` }
+      }
+    }
+
     const status: Activity['status'] =
       ran.deny !== undefined ? 'blocked' : 'isError' in ran && ran.isError === true ? 'failed' : 'done'
 
     try {
-    const ms = started > 0 ? (await $.clock.now()) - started : 0
+    const ended = await $.clock.now()
+    const ms = started > 0 ? ended - started : 0
+
+    // Audit trail and alerts. A key in the target never goes into the log.
+    const rawTarget = detailOf(e)
+    const target = findSecret(rawTarget) === undefined ? rawTarget : '[redacted]'
+    const why = ran.deny !== undefined ? ran.deny.replace(/^khfagy: /, '') : ''
+    note(ended, status === 'blocked' ? 'blocked.tool' : 'tool', { tool: e.tool, target, status, ms, reason: why })
+    if (status === 'blocked' && why !== '' && shouldAlert(`tool:${e.tool}`, ended)) {
+      void sendAlert($, alertUrl, t.alert(user, projectRoot ?? '', why), 'blocked.tool')
+    }
+    if (status === 'blocked' && auditDir !== '') {
+      await writeAudit($, auditDir, pending.splice(0))
+    }
 
     turn = {
       ...turn,
@@ -288,11 +536,31 @@ export const register: Register = (on, options) => {
     )
     turn = emptyDay()
 
+    if (budget > 0) {
+      const today = asDay(await $.store.get(key))
+      const used = today.tokensIn + today.tokensOut
+      if (used >= budget && budgetWarned !== `${key}:100`) {
+        budgetWarned = `${key}:100`
+        $.ui.toast(t.budgetOver(formatTokens(used), formatTokens(budget)))
+        note(now, 'budget.over', { reason: `${used} of ${budget}` })
+        if (shouldAlert('budget', now)) {
+          void sendAlert($, alertUrl, t.alert(user, projectRoot ?? '', t.budgetOver(formatTokens(used), formatTokens(budget))), 'budget.over')
+        }
+      } else if (used >= budget * 0.8 && used < budget && budgetWarned === '') {
+        budgetWarned = `${key}:80`
+        $.ui.toast(t.budgetNear(formatTokens(used), formatTokens(budget)))
+      }
+    }
+
     if (slowAfter > 0 && seconds > slowAfter) {
       $.ui.toast(t.slow(formatDuration(seconds)))
     }
     if (soundOnDone && seconds >= 15) {
       void $.audio.play({ asset: 'sounds/done.wav' }).catch(() => undefined)
+    }
+    note(now, 'turn', { ms: e.durationMs, reason: `${inTok + outTok} tokens` })
+    if (auditDir !== '' && pending.length > 0) {
+      await writeAudit($, auditDir, pending.splice(0)).catch(() => undefined)
     }
     return next(e)
   })

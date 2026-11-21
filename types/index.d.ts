@@ -17,6 +17,16 @@ export type SessionTotals = {
   tokensOut: number
 }
 
+export type Snapshot = {
+  seq: number
+  path: string
+  tool: string
+  existed: boolean
+  file: string
+  at: number
+  isRestored: boolean
+}
+
 declare module 'claude-code' {
   interface PluginState {
     khfagy: {
@@ -25,6 +35,7 @@ declare module 'claude-code' {
       totals: Shaped<SessionTotals>
       isBandHidden: boolean
       isLocked: boolean
+      history: Shaped<Snapshot[]>
     }
   }
 }
