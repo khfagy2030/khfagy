@@ -1,17 +1,17 @@
 {
   "name": "khfagy",
-  "version": "2.2.0",
-  "description": "The safety net for Claude Code and for teams: undo any change Claude made, secret shields, project fence, destructive-command guard, enforced team policies, audit log with CSV export, Slack/Teams/Telegram alerts, token budget, review mode and reports. English and Arabic.",
+  "version": "2.3.0",
+  "description": "The safety net for Claude Code and for teams: undo any change Claude made, secret shields, project fence, destructive-command guard, enforced team policies, audit log with CSV export, Slack/Teams/Telegram alerts, token budget, review mode and reports. Available in 25 languages.",
   "license": "MIT",
-  "keywords": ["security", "secrets", "guardrails", "review-mode", "activity", "stats", "theme", "arabic", "i18n"],
+  "keywords": ["security", "secrets", "guardrails", "undo", "audit", "team-policy", "review-mode", "i18n"],
   "types": "./types/index.d.ts",
   "userConfig": {
     "language": {
       "type": "string",
       "title": "Language",
-      "description": "Interface language: en (English) or ar (العربية)",
+      "description": "Interface language: en, zh, hi, es, ar, fr, bn, pt, ru, ur, id, de, ja, tr, ko, vi, it, fa, th, pl, nl, uk, ms, ta, sw",
       "default": "en",
-      "options": ["en", "ar"]
+      "options": ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "ru", "ur", "id", "de", "ja", "tr", "ko", "vi", "it", "fa", "th", "pl", "nl", "uk", "ms", "ta", "sw"]
     },
     "theme": {
       "type": "boolean",

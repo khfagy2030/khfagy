@@ -8,7 +8,7 @@ import type { AuditEvent, Policy } from './policy.js'
 import { POLICY_FILE } from './policy.js'
 import { findSecret, isDestructive, isSecretFile, parseList } from './guards.js'
 import type { Lang } from './i18n.js'
-import { strings } from './i18n.js'
+import { isLang, strings } from './i18n.js'
 import { makeColors } from './make-colors.js'
 import type { DayStats } from './stats.js'
 import { addDay, asDay, dayKey, emptyDay, formatDuration, formatTokens, tokensIn, tokensOut, topTools } from './stats.js'
@@ -90,7 +90,7 @@ const pathOf = (e: { readonly [key: string]: unknown }): string | undefined => {
 }
 
 export const register: Register = (on, options) => {
-  const lang: Lang = options.language === 'ar' ? 'ar' : 'en'
+  const lang: Lang = isLang(options.language) ? options.language : 'en'
   const t = strings(lang)
   const useTheme = options.theme !== false
   const soundOnDone = options.soundOnDone !== false

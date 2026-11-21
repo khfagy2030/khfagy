@@ -4,13 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>khfagy · The safety net for Claude Code</title>
-<meta name="description" content="Undo any change Claude made, keep your keys away from the model, enforce team policies and keep an audit log. Free and open source. English and Arabic.">
+<meta name="description" content="Undo any change Claude made, keep your keys away from the model, enforce team policies and keep an audit log. Free and open source, in 25 languages.">
+<meta property="og:image" content="https://khfagy2030.github.io/khfagy/social.png">
+<meta name="twitter:card" content="summary_large_image">
 <meta property="og:title" content="khfagy · The safety net for Claude Code">
 <meta property="og:description" content="Undo any change Claude made. Secret shields, project fence, team policy, audit log and alerts.">
 <link rel="icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #f4f9ff; --surface: #ffffff; --ink: #0a1a2b; --ink-2: #2c4560; --muted: #56708a;
@@ -29,9 +31,8 @@
   html { scroll-behavior: smooth; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
-    font: 16px/1.6 Inter, "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 16px/1.6 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  [dir="rtl"] body, [dir="rtl"] { font-family: "IBM Plex Sans Arabic", Inter, system-ui, sans-serif; }
   a { color: var(--accent); }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
 
@@ -117,14 +118,13 @@
       <a class="hide-sm" href="#teams" data-i="navTeams">For teams</a>
       <a class="hide-sm" href="#pricing" data-i="navPricing">Pricing</a>
       <a href="https://github.com/khfagy2030/khfagy">GitHub</a>
-      <button class="lang" id="lang" type="button">العربية</button>
     </div>
   </div>
 </nav>
 
 <header class="hero">
   <div class="wrap">
-    <span class="pill" data-i="pill">Free · Open source · English &amp; Arabic</span>
+    <span class="pill" data-i="pill">Free · Open source · 25 languages</span>
     <h1 data-i="h1">The safety net for Claude Code.</h1>
     <p class="lead" data-i="lead">Undo any change Claude made with one command. Keep your API keys away from the model. Stop the commands that wreck a project. Give your team one policy and one audit log.</p>
     <div class="ctas">
@@ -169,7 +169,7 @@
       <div class="card"><div class="ico">🔒</div><h3 data-i="f5t">Review mode</h3><p data-i="f5d">One command makes Claude read-only while you review its work.</p></div>
       <div class="card"><div class="ico">💰</div><h3 data-i="f6t">Token budget</h3><p data-i="f6d">A daily budget with warnings at 80% and 100%, and an optional hard stop.</p></div>
       <div class="card"><div class="ico">📊</div><h3 data-i="f7t">Live activity &amp; reports</h3><p data-i="f7d">See every tool call as it happens, plus daily and weekly reports with time and tokens.</p></div>
-      <div class="card"><div class="ico">🌍</div><h3 data-i="f8t">English &amp; Arabic</h3><p data-i="f8d">The whole interface in either language.</p></div>
+      <div class="card"><div class="ico">🌍</div><h3 data-i="f8t">25 languages</h3><p data-i="f8d">English, 中文, Español, हिन्दी, Français, Deutsch, 日本語, Português and 17 more.</p></div>
     </div>
   </div>
 </section>
@@ -273,61 +273,6 @@
   </div>
 </footer>
 
-<script>
-const AR = {
-  navFeatures: 'المميزات', navTeams: 'للشركات', navPricing: 'الأسعار',
-  pill: 'مجاني · مفتوح المصدر · عربي وإنجليزي',
-  h1: 'شبكة الأمان لـ Claude Code.',
-  lead: 'تراجع عن أي تعديل عمله Claude بأمر واحد. احمِ مفاتيحك السرية من الوصول للنموذج. امنع الأوامر التي تدمّر المشروع. وطبّق سياسة واحدة وسجل مراجعة واحد على فريقك كله.',
-  ctaInstall: 'ثبّتها مجانًا', ctaTeam: 'انضم لقائمة انتظار الشركات ←',
-  probTitle: 'البرمجة بالذكاء الاصطناعي سريعة. والأخطاء أسرع.',
-  probSub: 'وكيل يعدّل الملفات ويشغّل الأوامر يستطيع في رد واحد أن:',
-  p1t: 'يكسر كودًا شغّالًا', p1d: '…ولا تتذكر كيف كان الملف قبل التعديل.',
-  p2t: 'يسرّب سرًّا', p2d: 'مفتاح API لصقته في رسالة، أو قرأه من ‎.env، أو طبعه أمر، يذهب مباشرة إلى النموذج.',
-  p3t: 'يشغّل ما لا يمكن التراجع عنه', p3d: 'دفع إجباري يمسح شغل زملائك، أو حذف قاعدة بيانات، أو مسح مجلد.',
-  featTitle: 'كل ما تحتاجه، بدون أي إعداد.', featSub: 'ثبّتها وتحميك من أول رسالة.',
-  f1t: 'آلة الزمن', f1d: 'كل ملف يُحفظ قبل أن يغيّره Claude، و‎/khfagy undo يرجعه كما كان.',
-  f2t: 'درع أسرار ثلاثي', f2d: 'المفاتيح في رسالتك أو في الملفات السرية أو في ناتج الأوامر لا تصل للنموذج أبدًا.',
-  f3t: 'منع الأوامر المدمّرة', f3d: 'rm -rf / والدفع الإجباري ومسح الأقراص وDROP DATABASE تُمنع قبل أن تعمل.',
-  f4t: 'سور المشروع', f4d: 'Claude يعدّل الملفات داخل مشروعك فقط.',
-  f5t: 'وضع المراجعة', f5d: 'أمر واحد يجعل Claude للقراءة فقط وأنت تراجع شغله.',
-  f6t: 'ميزانية الرموز', f6d: 'ميزانية يومية مع تنبيه عند 80% و100%، وإيقاف تام اختياري.',
-  f7t: 'نشاط حي وتقارير', f7d: 'شاهد كل عملية لحظة بلحظة، مع تقارير يومية وأسبوعية للوقت والرموز.',
-  f8t: 'عربي وإنجليزي', f8d: 'الواجهة كاملة باللغتين.',
-  teamTitle: 'مصمّمة للفرق والشركات.', teamSub: 'ملف واحد في المشروع: نفس القواعد لكل المبرمجين، ولا أحد يستطيع إيقافها.',
-  t1: 'سياسة الفريق مفروضة على كل جهاز', t2: 'سجل مراجعة لكل عملية وكل منع، يُصدَّر CSV للمراجعين',
-  t3: 'تنبيهات فورية على Slack وTeams وDiscord وتيليجرام', t4: 'تجميد المشروع للقراءة فقط وقت الإصدار',
-  t5: 'تعمل على أجهزتكم: لا يُرسل شيء لأي مكان غير تنبيهاتكم',
-  priceTitle: 'أسعار بسيطة.', priceSub: 'كل ما يعمل على جهازك مجاني للأبد. ولوحة تحكم الفريق قادمة قريبًا.',
-  forever: 'للأبد', pf1: 'كل أنواع الحماية وآلة الزمن', pf2: 'سياسة الفريق وسجل المراجعة المحلي والتنبيهات', pf3: 'التقارير وميزانية الرموز',
-  ctaInstall2: 'ثبّت', soon: 'قريبًا', soon2: 'قريبًا', perDev: 'لكل مبرمج / شهريًا', perDev2: 'لكل مبرمج / شهريًا',
-  pt1: 'لوحة تحكم على الإنترنت للفريق كله', pt2: 'عدّل السياسة مرة، فتصل لكل الأجهزة', pt3: 'سجل مراجعة مركزي وتكلفة كل مبرمج', pt4: 'خصم 50% مدى الحياة لأول الفرق',
-  ctaWait: 'انضم لقائمة الانتظار', pb1: 'كل ما في Team', pb2: 'سجل مراجعة سنة كاملة وتقارير امتثال', pb3: 'دخول موحّد ودعم بأولوية', ctaWait2: 'تواصل معنا',
-  instTitle: 'ثبّتها في 10 ثوانٍ.', instSub: 'داخل Claude Code في الطرفية:',
-  instDesk: 'تطبيق سطح المكتب: + ← Plugins ← Add marketplace ← khfagy2030/khfagy ← Add plugin',
-  finalTitle: 'اشتغل أسرع بدون خوف.', finalSub: 'مجانية لكل مبرمج. ولوحة تحكم الفريق قادمة قريبًا.',
-  ctaInstall3: 'ثبّتها مجانًا', ctaStar: '⭐ ضع نجمة على GitHub',
-  disclaimer: 'khfagy مشروع مستقل وغير تابع لشركة Anthropic.'
-};
-const EN = {};
-document.querySelectorAll('[data-i]').forEach(el => { EN[el.dataset.i] = el.innerHTML; });
-const button = document.getElementById('lang');
-function setLang(lang) {
-  const dict = lang === 'ar' ? AR : EN;
-  document.documentElement.lang = lang;
-  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-  document.querySelectorAll('[data-i]').forEach(el => {
-    const v = dict[el.dataset.i];
-    if (v !== undefined) { if (lang === 'ar') { el.textContent = v; } else { el.innerHTML = v; } }
-  });
-  button.textContent = lang === 'ar' ? 'English' : 'العربية';
-  try { localStorage.setItem('khfagy-lang', lang); } catch (e) {}
-}
-button.addEventListener('click', () => setLang(document.documentElement.lang === 'ar' ? 'en' : 'ar'));
-let saved = null;
-try { saved = localStorage.getItem('khfagy-lang'); } catch (e) {}
-const start = saved || ((navigator.language || '').toLowerCase().startsWith('ar') ? 'ar' : 'en');
-if (start === 'ar') setLang('ar');
-</script>
+
 </body>
 </html>

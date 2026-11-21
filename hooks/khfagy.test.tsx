@@ -4,6 +4,32 @@ import type { On } from 'claude-code'
 import { findSecret, isDestructive, isSecretFile, parseList } from './guards.js'
 import { addDay, asDay, emptyDay, formatDuration, topTools } from './stats.js'
 import { alertRequest, parsePolicy, toCsv } from './policy.js'
+import { LANG_NAMES } from './langs.js'
+import { strings } from './i18n.js'
+
+test('25 languages, each with its own blocked message', () => {
+  const codes = Object.keys(LANG_NAMES) as (keyof typeof LANG_NAMES)[]
+  expect(codes.length).toBe(25)
+  const seen = new Set<string>()
+  for (const code of codes) {
+    const msg = strings(code).blockedFile('/app/.env')
+    expect(msg).toContain('/app/.env')
+    seen.add(msg)
+  }
+  expect(seen.size).toBe(25)
+})
+
+test('a Japanese interface', { options: { language: 'ja' } }, async $ => {
+  const ui = await $.ui.mount({
+    plugin: 'khfagy',
+    component: 'Pane',
+    requestId: 'khfagy-activity',
+    surface: 'desktop',
+    props: { title: 'khfagy', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+  })
+  expect((await ui.find({ type: 'Text', text: /^まだ/ }))?.text).toBe('まだアクティビティはありません。')
+  await ui.unmount()
+})
 
 // Stand in for the engine's clock, store, toasts, status line, theme and audio.
 const engine = (on: On, toolCall?: Parameters<On>[1]) => {

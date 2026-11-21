@@ -1,4 +1,9 @@
-export type Lang = 'en' | 'ar'
+import type { LangCode, Phrases } from './langs.js'
+import { LANG_NAMES, PHRASES } from './langs.js'
+
+export type Lang = LangCode
+
+export const isLang = (v: unknown): v is Lang => typeof v === 'string' && v in LANG_NAMES
 
 const en = {
   ready: 'khfagy is on',
@@ -182,5 +187,35 @@ const ar: typeof en = {
   ].join('\n'),
 }
 
-export const strings = (lang: Lang) => (lang === 'ar' ? ar : en)
+/** Every visible message in a language from its short phrases; the rest stays English. */
+const fromPhrases = (P: Phrases): typeof en => ({
+  ...en,
+  ready: P.ready,
+  paneEmpty: P.empty,
+  sectionActivity: P.activity,
+  sectionTurns: P.recent,
+  hide: P.hide,
+  unlock: P.unlock,
+  lockedBand: `🔒 ${P.review}: ${P.reviewBand}`,
+  locked: `${P.reviewOn} · /khfagy unlock`,
+  unlocked: P.reviewOff,
+  blockedLocked: tool => `${P.review}: ${tool} · ${P.blocked} (/khfagy unlock)`,
+  lastTurn: (s, t, f) => `${P.lastTurn} ${s} · ${t} ${P.tools}${f > 0 ? ` · ${f} ${P.failed}` : ''}`,
+  status: (t, f) => `⚓ ${t} ${P.tools}${f > 0 ? ` · ${f} ${P.failed}` : ''}`,
+  slow: s => `${P.longTurn}: ${s}`,
+  blockedFile: p => `${P.blocked}: ${p} (${P.secretFile})`,
+  blockedRead: p => `${P.blocked}: ${p} (${P.secretFile})`,
+  blockedCmd: c => `${P.blocked}: ${P.destructive}: ${c}`,
+  blockedPrompt: kind => `${P.notSent}: ${P.secretInMsg} (${kind})`,
+  blockedFence: p => `${P.blocked}: ${p} (${P.outside})`,
+  withheldOutput: (tool, kind) => `${P.withheld}: ${tool} (${kind})`,
+  budgetNear: (used, budget) => `${P.budgetNear}: ${used} / ${budget}`,
+  budgetOver: (used, budget) => `${P.budgetOver}: ${used} / ${budget}`,
+  undoNothing: P.nothing,
+  undone: p => `${P.restored}: ${p}`,
+  readyPolicy: name => `${P.ready} · ${name}`,
+})
+
+export const strings = (lang: Lang): typeof en =>
+  lang === 'en' ? en : lang === 'ar' ? ar : fromPhrases(PHRASES[lang])
 export type Strings = typeof en

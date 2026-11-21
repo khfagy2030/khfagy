@@ -8,17 +8,16 @@ body:
       value: |
         Thanks for your interest in **khfagy for Teams**.
         ⚠️ Issues on this repository are **public**. Share only what you are happy for others to see.
-        شكرًا لاهتمامك. ⚠️ هذه الصفحة **عامة**، فاكتب فقط ما لا مانع من ظهوره.
   - type: input
     id: company
     attributes:
-      label: Company or team (optional) · اسم الشركة أو الفريق (اختياري)
+      label: Company or team (optional)
     validations:
       required: false
   - type: dropdown
     id: size
     attributes:
-      label: How many developers use Claude Code? · كم مبرمج يستخدم Claude Code؟
+      label: How many developers use Claude Code?
       options:
         - "1"
         - "2-5"
@@ -30,27 +29,27 @@ body:
   - type: checkboxes
     id: wants
     attributes:
-      label: What would you pay for? · ما الذي تدفع فيه؟
+      label: What would you pay for?
       options:
-        - label: Web dashboard for the team · لوحة تحكم للفريق
-        - label: Central audit log · سجل مراجعة مركزي
-        - label: Cost per developer · تكلفة كل مبرمج
-        - label: Edit the policy from the web · تعديل السياسة من المتصفح
-        - label: Single sign-on (SSO) · دخول موحّد
+        - label: Web dashboard for the team
+        - label: Central audit log
+        - label: Cost per developer
+        - label: Edit the policy from the web
+        - label: Single sign-on (SSO)
   - type: dropdown
     id: price
     attributes:
-      label: Is $12 per developer per month OK? · هل 12 دولار للمبرمج شهريًا مناسب؟
+      label: Is $12 per developer per month OK?
       options:
-        - Yes · نعم
-        - Only with a discount · بخصم فقط
-        - Too expensive · غالي
-        - Not sure · غير متأكد
+        - "Yes"
+        - Only with a discount
+        - Too expensive
+        - Not sure
     validations:
       required: true
   - type: textarea
     id: notes
     attributes:
-      label: Anything else? · أي ملاحظات أخرى؟
+      label: Anything else?
     validations:
       required: false

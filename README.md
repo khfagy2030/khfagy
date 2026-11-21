@@ -2,7 +2,7 @@
 
 **The safety net for Claude Code.** Undo any change Claude made with one command. Keep your keys away from the model. Stop the commands that wreck a project. And see exactly what Claude did, how long it took and how many tokens it used.
 
-English and Arabic (العربية) built in.
+Available in 25 languages. Website: [khfagy2030.github.io/khfagy](https://khfagy2030.github.io/khfagy/)
 
 ## Why khfagy
 
@@ -53,7 +53,7 @@ English and Arabic (العربية) built in.
 | **Done chime** | A soft sound when a turn of 15 seconds or more finishes (desktop app). |
 | **Slow turn alert** | A toast when a turn runs longer than you set. |
 | **Navy theme** | Bright sea-spray blue by day, lit-harbour navy by night. |
-| **English and Arabic** | The whole interface in either language. |
+| **25 languages** | From English and 中文 to Español, हिन्दी and Kiswahili. |
 
 ## 🏢 For teams
 
@@ -177,26 +177,23 @@ khfagy runs entirely on your machine. It sends nothing anywhere except the alert
 
 Guards match text, so they are a safety net, not a sandbox. A determined user can get around them, and a command that only mentions a blocked phrase in its text is blocked too.
 
-## العربية
+## Languages
 
-**khfagy** شبكة الأمان لـ Claude Code:
+Set `language` in `/config` → khfagy. Messages, alerts, the pane and the band are translated into all 25 languages; reports and help stay in English except in Arabic, which is translated in full.
 
-- **🏢 سياسة الفريق:** ملف `khfagy.policy.json` في المشروع يفرض نفس القواعد على كل الموظفين، ولا يستطيع أحد إيقافها من إعداداته.
-- **📜 سجل المراجعة:** كل عملية وكل منع مسجّل بالوقت والمستخدم، و`/khfagy audit` يصدّره ملف CSV يفتح في Excel.
-- **🔔 تنبيهات فورية:** على Slack أو Teams أو Discord أو تيليجرام عندما تمنع الحماية شيئًا خطيرًا.
-- **⏪ آلة الزمن:** يحفظ كل ملف قبل أن يغيّره Claude، و`/khfagy undo` يرجعه كما كان.
-- **سور المشروع:** يمنع Claude من تعديل أي ملف خارج مجلد المشروع.
-- **حجب الأسرار من النتائج:** إذا طبع أمر مفتاحًا سريًا فلن يراه Claude.
-- **ميزانية الرموز اليومية:** تنبيه عند 80% و100%، مع إمكانية الإيقاف التام.
-- **درع الرسائل:** يمنع إرسال أي رسالة فيها مفتاح API أو توكن أو مفتاح خاص.
-- **حماية الملفات السرية:** يمنع Claude من قراءة أو تعديل ملفات `.env` والمفاتيح وملفات الاعتماد.
-- **منع الأوامر المدمّرة:** مثل مسح القرص و`rm -rf /` و`git push --force` و`DROP DATABASE`.
-- **وضع المراجعة:** الأمر `/khfagy lock` يجعل Claude للقراءة فقط حتى `/khfagy unlock`.
-- **لوحة النشاط وسجل الأدوار:** ترى كل ما يفعله Claude لحظة بلحظة.
-- **تقارير يومية وأسبوعية:** الوقت وعدد الأدوات واستهلاك الرموز (tokens).
-- **صوت عند انتهاء الرد**، وتنبيه للردود الطويلة، ومظهر أزرق بحري.
+| Code | Language | Code | Language | Code | Language |
+| --- | --- | --- | --- | --- | --- |
+| `en` | English | `id` | Bahasa Indonesia | `fa` | فارسی |
+| `zh` | 中文 | `de` | Deutsch | `th` | ไทย |
+| `hi` | हिन्दी | `ja` | 日本語 | `pl` | Polski |
+| `es` | Español | `tr` | Türkçe | `nl` | Nederlands |
+| `ar` | العربية | `ko` | 한국어 | `uk` | Українська |
+| `fr` | Français | `vi` | Tiếng Việt | `ms` | Bahasa Melayu |
+| `bn` | বাংলা | `it` | Italiano | `ta` | தமிழ் |
+| `pt` | Português | `ur` | اردو | `sw` | Kiswahili |
+| `ru` | Русский | | | | |
 
-لتشغيل الواجهة بالعربية اضبط `language` على `ar` من `/config`.
+Found a better translation? Pull requests are welcome.
 
 ## License
 
