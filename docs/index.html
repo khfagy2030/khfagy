@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>khfagy · The safety net for Claude Code</title>
+<meta name="description" content="Undo any change Claude made, keep your keys away from the model, enforce team policies and keep an audit log. Free and open source. English and Arabic.">
+<meta property="og:title" content="khfagy · The safety net for Claude Code">
+<meta property="og:description" content="Undo any change Claude made. Secret shields, project fence, team policy, audit log and alerts.">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f9ff; --surface: #ffffff; --ink: #0a1a2b; --ink-2: #2c4560; --muted: #56708a;
+    --line: #d7e5f3; --accent: #1e88e5; --accent-2: #1565c0; --accent-soft: #e3f1fd;
+    --good: #1fa774; --bad: #e53935; --hero-a: #1e88e5; --hero-b: #13253a;
+    --radius: 16px; --shadow: 0 10px 30px rgba(19, 37, 58, .08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1d2e; --surface: #16283d; --ink: #f2f7fc; --ink-2: #c6d6e8; --muted: #93a9c0;
+      --line: #23405e; --accent: #4aa3f0; --accent-2: #7cbcf5; --accent-soft: #183553;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .3);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 Inter, "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  [dir="rtl"] body, [dir="rtl"] { font-family: "IBM Plex Sans Arabic", Inter, system-ui, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+  nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(10px);
+        background: color-mix(in srgb, var(--bg) 85%, transparent); border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; align-items: center; gap: 16px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; color: var(--ink); text-decoration: none; }
+  .brand img { width: 32px; height: 32px; border-radius: 8px; }
+  nav .links { margin-inline-start: auto; display: flex; gap: 18px; align-items: center; }
+  nav .links a { color: var(--ink-2); text-decoration: none; font-weight: 600; font-size: 15px; }
+  nav .links a:hover { color: var(--accent); }
+  .lang { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px;
+          padding: 6px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  @media (max-width: 720px) { nav .links a.hide-sm { display: none; } }
+
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 14px 22px; border-radius: 12px;
+         font-weight: 700; text-decoration: none; border: 1px solid transparent; transition: transform .15s ease; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.primary { background: #fff; color: var(--hero-b); }
+  .btn.ghost { border-color: rgba(255,255,255,.5); color: #fff; }
+  .btn.solid { background: var(--accent); color: #fff; }
+
+  header.hero { background: linear-gradient(135deg, var(--hero-a), var(--hero-b)); color: #fff; padding: 88px 0 96px; overflow: hidden; position: relative; }
+  .hero svg.waves { position: absolute; inset: auto 0 0 0; width: 100%; height: 120px; opacity: .25; }
+  .hero h1 { font-size: clamp(34px, 5.5vw, 60px); line-height: 1.1; margin: 0 0 18px; letter-spacing: -.02em; max-width: 820px; }
+  .hero p.lead { font-size: clamp(17px, 2.2vw, 21px); color: #dcecfb; max-width: 680px; margin: 0 0 30px; }
+  .hero .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+  .pill { display: inline-block; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3);
+          padding: 6px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; margin-bottom: 22px; }
+  .terminal { margin-top: 44px; background: #0b1622; border: 1px solid #23405e; border-radius: 14px; padding: 18px 20px;
+              font: 14px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; color: #c6d6e8; max-width: 720px;
+              box-shadow: 0 20px 50px rgba(0,0,0,.35); direction: ltr; text-align: left; overflow-x: auto; }
+  .terminal .p { color: #4aa3f0; } .terminal .b { color: #ff8a80; } .terminal .g { color: #69f0ae; } .terminal .m { color: #7f99b3; }
+
+  section { padding: 80px 0; }
+  section h2 { font-size: clamp(28px, 4vw, 40px); margin: 0 0 12px; letter-spacing: -.01em; }
+  section p.sub { color: var(--muted); font-size: 18px; margin: 0 0 40px; max-width: 700px; }
+
+  .grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); }
+  .card .ico { width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; font-size: 22px; margin-bottom: 14px; }
+  .card h3 { margin: 0 0 6px; font-size: 18px; }
+  .card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+  .problem { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .problem .card { border-inline-start: 4px solid var(--bad); }
+
+  .team { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  pre.code { background: #0b1622; color: #c6d6e8; border-radius: 12px; padding: 18px; overflow-x: auto;
+             font: 13.5px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; direction: ltr; text-align: left; margin: 0; }
+  .split { display: grid; gap: 28px; grid-template-columns: 1fr 1fr; align-items: start; }
+  @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+  ul.checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  ul.checks li { padding-inline-start: 30px; position: relative; color: var(--ink-2); }
+  ul.checks li::before { content: "✓"; position: absolute; inset-inline-start: 0; color: var(--good); font-weight: 800; }
+
+  .pricing { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .plan { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .plan.featured { border: 2px solid var(--accent); }
+  .plan .tag { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; }
+  .plan .price { font-size: 40px; font-weight: 800; margin: 8px 0 2px; }
+  .plan .per { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+  .plan ul.checks { margin-bottom: 24px; flex: 1; }
+  .plan .btn { justify-content: center; }
+  .soon { font-size: 12px; background: var(--accent-soft); color: var(--accent-2); padding: 3px 10px; border-radius: 999px; font-weight: 700; margin-inline-start: 8px; vertical-align: middle; }
+
+  .install { text-align: center; }
+  .install pre.code { max-width: 640px; margin: 0 auto 14px; }
+  .cta-final { background: linear-gradient(135deg, var(--hero-a), var(--hero-b)); color: #fff; text-align: center; border-radius: 24px; padding: 56px 24px; }
+  .cta-final h2 { color: #fff; }
+  .cta-final p { color: #dcecfb; font-size: 18px; margin: 0 0 26px; }
+  footer { padding: 36px 0 50px; color: var(--muted); font-size: 14px; text-align: center; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.png" alt="">khfagy</a>
+    <div class="links">
+      <a class="hide-sm" href="#features" data-i="navFeatures">Features</a>
+      <a class="hide-sm" href="#teams" data-i="navTeams">For teams</a>
+      <a class="hide-sm" href="#pricing" data-i="navPricing">Pricing</a>
+      <a href="https://github.com/khfagy2030/khfagy">GitHub</a>
+      <button class="lang" id="lang" type="button">العربية</button>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="pill" data-i="pill">Free · Open source · English &amp; Arabic</span>
+    <h1 data-i="h1">The safety net for Claude Code.</h1>
+    <p class="lead" data-i="lead">Undo any change Claude made with one command. Keep your API keys away from the model. Stop the commands that wreck a project. Give your team one policy and one audit log.</p>
+    <div class="ctas">
+      <a class="btn primary" href="#install" data-i="ctaInstall">Install free</a>
+      <a class="btn ghost" href="https://github.com/khfagy2030/khfagy/issues/new?template=waitlist.yml" data-i="ctaTeam">Join the Teams waitlist →</a>
+    </div>
+    <div class="terminal" aria-label="Example">
+      <div><span class="p">❯</span> Claude: <span class="m">Write C:\proj\.env</span></div>
+      <div><span class="b">⛔ khfagy: Blocked: .env is a protected secret file</span></div>
+      <div><span class="p">❯</span> Claude: <span class="m">git push --force origin main</span></div>
+      <div><span class="b">⛔ khfagy: Blocked a destructive command</span></div>
+      <div><span class="p">❯</span> /khfagy undo</div>
+      <div><span class="g">✓ Restored src/app.ts to how it was before Claude's change.</span></div>
+    </div>
+  </div>
+  <svg class="waves" viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 60 C 240 10, 480 110, 720 60 S 1200 10, 1440 60 V120 H0 Z" fill="#fff"/>
+  </svg>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2 data-i="probTitle">AI coding is fast. Mistakes are faster.</h2>
+    <p class="sub" data-i="probSub">An agent that edits files and runs commands can, in one turn:</p>
+    <div class="problem">
+      <div class="card"><h3 data-i="p1t">Break working code</h3><p data-i="p1d">…and you can't remember what the file looked like before.</p></div>
+      <div class="card"><h3 data-i="p2t">Leak a secret</h3><p data-i="p2d">An API key pasted in a message, read from .env or printed by a command goes straight to the model.</p></div>
+      <div class="card"><h3 data-i="p3t">Run something you can't take back</h3><p data-i="p3d">A force push, a dropped database, a wiped folder.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="features" style="padding-top:0">
+  <div class="wrap">
+    <h2 data-i="featTitle">Everything you need, nothing to configure.</h2>
+    <p class="sub" data-i="featSub">Install it and it protects you from the first message.</p>
+    <div class="grid">
+      <div class="card"><div class="ico">⏪</div><h3 data-i="f1t">Time machine</h3><p data-i="f1d">Every file is saved before Claude changes it. /khfagy undo puts it back.</p></div>
+      <div class="card"><div class="ico">🔑</div><h3 data-i="f2t">Triple secret shield</h3><p data-i="f2d">Keys in your message, in secret files or in command output never reach the model.</p></div>
+      <div class="card"><div class="ico">💥</div><h3 data-i="f3t">Destructive-command guard</h3><p data-i="f3d">rm -rf /, force pushes, disk wipes and DROP DATABASE are blocked before they run.</p></div>
+      <div class="card"><div class="ico">🚧</div><h3 data-i="f4t">Project fence</h3><p data-i="f4d">Claude can only change files inside your project.</p></div>
+      <div class="card"><div class="ico">🔒</div><h3 data-i="f5t">Review mode</h3><p data-i="f5d">One command makes Claude read-only while you review its work.</p></div>
+      <div class="card"><div class="ico">💰</div><h3 data-i="f6t">Token budget</h3><p data-i="f6d">A daily budget with warnings at 80% and 100%, and an optional hard stop.</p></div>
+      <div class="card"><div class="ico">📊</div><h3 data-i="f7t">Live activity &amp; reports</h3><p data-i="f7d">See every tool call as it happens, plus daily and weekly reports with time and tokens.</p></div>
+      <div class="card"><div class="ico">🌍</div><h3 data-i="f8t">English &amp; Arabic</h3><p data-i="f8d">The whole interface in either language.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="teams" class="team">
+  <div class="wrap split">
+    <div>
+      <h2 data-i="teamTitle">Built for teams.</h2>
+      <p class="sub" data-i="teamSub">Commit one file. Every developer gets the same rules, and nobody can switch them off.</p>
+      <ul class="checks">
+        <li data-i="t1">Team policy enforced on every machine</li>
+        <li data-i="t2">Audit log of every action and block, exported to CSV for your auditors</li>
+        <li data-i="t3">Instant alerts on Slack, Teams, Discord or Telegram</li>
+        <li data-i="t4">Freeze a project read-only during a release</li>
+        <li data-i="t5">Runs on your machines: nothing is sent anywhere but your alerts</li>
+      </ul>
+    </div>
+<pre class="code">// khfagy.policy.json
+{
+  "name": "Acme Security Policy",
+  "enforce": {
+    "guardSecrets": true,
+    "guardCommands": true,
+    "guardProjectFence": true,
+    "timeMachine": true
+  },
+  "blockedCommands": ["terraform destroy"],
+  "dailyTokenBudget": 2000000,
+  "audit": { "dir": ".khfagy/audit" },
+  "alerts": { "webhook": "env" }
+}</pre>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="wrap">
+    <h2 data-i="priceTitle">Simple pricing.</h2>
+    <p class="sub" data-i="priceSub">Everything on your machine is free forever. The team dashboard is coming soon.</p>
+    <div class="pricing">
+      <div class="plan">
+        <span class="tag">Free</span>
+        <div class="price">$0</div><div class="per" data-i="forever">forever</div>
+        <ul class="checks">
+          <li data-i="pf1">Every protection and the time machine</li>
+          <li data-i="pf2">Team policy, local audit log and alerts</li>
+          <li data-i="pf3">Reports and token budget</li>
+        </ul>
+        <a class="btn solid" href="#install" data-i="ctaInstall2">Install</a>
+      </div>
+      <div class="plan featured">
+        <span class="tag">Team <span class="soon" data-i="soon">Soon</span></span>
+        <div class="price">$12</div><div class="per" data-i="perDev">per developer / month</div>
+        <ul class="checks">
+          <li data-i="pt1">Web dashboard for the whole team</li>
+          <li data-i="pt2">Edit the policy once, it reaches every machine</li>
+          <li data-i="pt3">Central audit log and cost per developer</li>
+          <li data-i="pt4">50% off for life for the first teams</li>
+        </ul>
+        <a class="btn solid" href="https://github.com/khfagy2030/khfagy/issues/new?template=waitlist.yml" data-i="ctaWait">Join the waitlist</a>
+      </div>
+      <div class="plan">
+        <span class="tag">Business <span class="soon" data-i="soon2">Soon</span></span>
+        <div class="price">$25</div><div class="per" data-i="perDev2">per developer / month</div>
+        <ul class="checks">
+          <li data-i="pb1">Everything in Team</li>
+          <li data-i="pb2">One year of audit history and compliance exports</li>
+          <li data-i="pb3">Single sign-on and priority support</li>
+        </ul>
+        <a class="btn solid" href="https://github.com/khfagy2030/khfagy/issues/new?template=waitlist.yml" data-i="ctaWait2">Talk to us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="install" class="install" style="padding-top:0">
+  <div class="wrap">
+    <h2 data-i="instTitle">Install in 10 seconds.</h2>
+    <p class="sub" style="margin-inline:auto" data-i="instSub">In a Claude Code terminal session:</p>
+    <pre class="code">/plugin install khfagy --marketplace khfagy2030/khfagy</pre>
+    <p style="color:var(--muted)" data-i="instDesk">Desktop app: + → Plugins → Add marketplace → khfagy2030/khfagy → Add plugin</p>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="cta-final">
+      <h2 data-i="finalTitle">Ship faster without the fear.</h2>
+      <p data-i="finalSub">Free for every developer. Team dashboard coming soon.</p>
+      <div class="ctas" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <a class="btn primary" href="#install" data-i="ctaInstall3">Install free</a>
+        <a class="btn ghost" href="https://github.com/khfagy2030/khfagy" data-i="ctaStar">⭐ Star on GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    khfagy · MIT License · <a href="https://github.com/khfagy2030/khfagy">GitHub</a>
+    <br><span data-i="disclaimer">khfagy is an independent project and is not affiliated with Anthropic.</span>
+  </div>
+</footer>
+
+<script>
+const AR = {
+  navFeatures: 'المميزات', navTeams: 'للشركات', navPricing: 'الأسعار',
+  pill: 'مجاني · مفتوح المصدر · عربي وإنجليزي',
+  h1: 'شبكة الأمان لـ Claude Code.',
+  lead: 'تراجع عن أي تعديل عمله Claude بأمر واحد. احمِ مفاتيحك السرية من الوصول للنموذج. امنع الأوامر التي تدمّر المشروع. وطبّق سياسة واحدة وسجل مراجعة واحد على فريقك كله.',
+  ctaInstall: 'ثبّتها مجانًا', ctaTeam: 'انضم لقائمة انتظار الشركات ←',
+  probTitle: 'البرمجة بالذكاء الاصطناعي سريعة. والأخطاء أسرع.',
+  probSub: 'وكيل يعدّل الملفات ويشغّل الأوامر يستطيع في رد واحد أن:',
+  p1t: 'يكسر كودًا شغّالًا', p1d: '…ولا تتذكر كيف كان الملف قبل التعديل.',
+  p2t: 'يسرّب سرًّا', p2d: 'مفتاح API لصقته في رسالة، أو قرأه من ‎.env، أو طبعه أمر، يذهب مباشرة إلى النموذج.',
+  p3t: 'يشغّل ما لا يمكن التراجع عنه', p3d: 'دفع إجباري يمسح شغل زملائك، أو حذف قاعدة بيانات، أو مسح مجلد.',
+  featTitle: 'كل ما تحتاجه، بدون أي إعداد.', featSub: 'ثبّتها وتحميك من أول رسالة.',
+  f1t: 'آلة الزمن', f1d: 'كل ملف يُحفظ قبل أن يغيّره Claude، و‎/khfagy undo يرجعه كما كان.',
+  f2t: 'درع أسرار ثلاثي', f2d: 'المفاتيح في رسالتك أو في الملفات السرية أو في ناتج الأوامر لا تصل للنموذج أبدًا.',
+  f3t: 'منع الأوامر المدمّرة', f3d: 'rm -rf / والدفع الإجباري ومسح الأقراص وDROP DATABASE تُمنع قبل أن تعمل.',
+  f4t: 'سور المشروع', f4d: 'Claude يعدّل الملفات داخل مشروعك فقط.',
+  f5t: 'وضع المراجعة', f5d: 'أمر واحد يجعل Claude للقراءة فقط وأنت تراجع شغله.',
+  f6t: 'ميزانية الرموز', f6d: 'ميزانية يومية مع تنبيه عند 80% و100%، وإيقاف تام اختياري.',
+  f7t: 'نشاط حي وتقارير', f7d: 'شاهد كل عملية لحظة بلحظة، مع تقارير يومية وأسبوعية للوقت والرموز.',
+  f8t: 'عربي وإنجليزي', f8d: 'الواجهة كاملة باللغتين.',
+  teamTitle: 'مصمّمة للفرق والشركات.', teamSub: 'ملف واحد في المشروع: نفس القواعد لكل المبرمجين، ولا أحد يستطيع إيقافها.',
+  t1: 'سياسة الفريق مفروضة على كل جهاز', t2: 'سجل مراجعة لكل عملية وكل منع، يُصدَّر CSV للمراجعين',
+  t3: 'تنبيهات فورية على Slack وTeams وDiscord وتيليجرام', t4: 'تجميد المشروع للقراءة فقط وقت الإصدار',
+  t5: 'تعمل على أجهزتكم: لا يُرسل شيء لأي مكان غير تنبيهاتكم',
+  priceTitle: 'أسعار بسيطة.', priceSub: 'كل ما يعمل على جهازك مجاني للأبد. ولوحة تحكم الفريق قادمة قريبًا.',
+  forever: 'للأبد', pf1: 'كل أنواع الحماية وآلة الزمن', pf2: 'سياسة الفريق وسجل المراجعة المحلي والتنبيهات', pf3: 'التقارير وميزانية الرموز',
+  ctaInstall2: 'ثبّت', soon: 'قريبًا', soon2: 'قريبًا', perDev: 'لكل مبرمج / شهريًا', perDev2: 'لكل مبرمج / شهريًا',
+  pt1: 'لوحة تحكم على الإنترنت للفريق كله', pt2: 'عدّل السياسة مرة، فتصل لكل الأجهزة', pt3: 'سجل مراجعة مركزي وتكلفة كل مبرمج', pt4: 'خصم 50% مدى الحياة لأول الفرق',
+  ctaWait: 'انضم لقائمة الانتظار', pb1: 'كل ما في Team', pb2: 'سجل مراجعة سنة كاملة وتقارير امتثال', pb3: 'دخول موحّد ودعم بأولوية', ctaWait2: 'تواصل معنا',
+  instTitle: 'ثبّتها في 10 ثوانٍ.', instSub: 'داخل Claude Code في الطرفية:',
+  instDesk: 'تطبيق سطح المكتب: + ← Plugins ← Add marketplace ← khfagy2030/khfagy ← Add plugin',
+  finalTitle: 'اشتغل أسرع بدون خوف.', finalSub: 'مجانية لكل مبرمج. ولوحة تحكم الفريق قادمة قريبًا.',
+  ctaInstall3: 'ثبّتها مجانًا', ctaStar: '⭐ ضع نجمة على GitHub',
+  disclaimer: 'khfagy مشروع مستقل وغير تابع لشركة Anthropic.'
+};
+const EN = {};
+document.querySelectorAll('[data-i]').forEach(el => { EN[el.dataset.i] = el.innerHTML; });
+const button = document.getElementById('lang');
+function setLang(lang) {
+  const dict = lang === 'ar' ? AR : EN;
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-i]').forEach(el => {
+    const v = dict[el.dataset.i];
+    if (v !== undefined) { if (lang === 'ar') { el.textContent = v; } else { el.innerHTML = v; } }
+  });
+  button.textContent = lang === 'ar' ? 'English' : 'العربية';
+  try { localStorage.setItem('khfagy-lang', lang); } catch (e) {}
+}
+button.addEventListener('click', () => setLang(document.documentElement.lang === 'ar' ? 'en' : 'ar'));
+let saved = null;
+try { saved = localStorage.getItem('khfagy-lang'); } catch (e) {}
+const start = saved || ((navigator.language || '').toLowerCase().startsWith('ar') ? 'ar' : 'en');
+if (start === 'ar') setLang('ar');
+</script>
+</body>
+</html>

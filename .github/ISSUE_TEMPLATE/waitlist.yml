@@ -1,0 +1,56 @@
+name: Join the khfagy Teams waitlist
+description: Get early access to the team dashboard, with 50% off for life for the first teams.
+title: "[Waitlist] "
+labels: ["waitlist"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your interest in **khfagy for Teams**.
+        ⚠️ Issues on this repository are **public**. Share only what you are happy for others to see.
+        شكرًا لاهتمامك. ⚠️ هذه الصفحة **عامة**، فاكتب فقط ما لا مانع من ظهوره.
+  - type: input
+    id: company
+    attributes:
+      label: Company or team (optional) · اسم الشركة أو الفريق (اختياري)
+    validations:
+      required: false
+  - type: dropdown
+    id: size
+    attributes:
+      label: How many developers use Claude Code? · كم مبرمج يستخدم Claude Code؟
+      options:
+        - "1"
+        - "2-5"
+        - "6-20"
+        - "21-100"
+        - "100+"
+    validations:
+      required: true
+  - type: checkboxes
+    id: wants
+    attributes:
+      label: What would you pay for? · ما الذي تدفع فيه؟
+      options:
+        - label: Web dashboard for the team · لوحة تحكم للفريق
+        - label: Central audit log · سجل مراجعة مركزي
+        - label: Cost per developer · تكلفة كل مبرمج
+        - label: Edit the policy from the web · تعديل السياسة من المتصفح
+        - label: Single sign-on (SSO) · دخول موحّد
+  - type: dropdown
+    id: price
+    attributes:
+      label: Is $12 per developer per month OK? · هل 12 دولار للمبرمج شهريًا مناسب؟
+      options:
+        - Yes · نعم
+        - Only with a discount · بخصم فقط
+        - Too expensive · غالي
+        - Not sure · غير متأكد
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else? · أي ملاحظات أخرى؟
+    validations:
+      required: false
