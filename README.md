@@ -195,6 +195,10 @@ Set `language` in `/config` → khfagy. Messages, alerts, the pane and the band 
 
 Found a better translation? Pull requests are welcome.
 
+## Contact
+
+Questions, partnerships or business plans: [hello@khfagy.com](mailto:hello@khfagy.com)
+
 ## License
 
 MIT

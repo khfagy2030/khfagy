@@ -3,6 +3,8 @@
   "version": "2.3.0",
   "description": "The safety net for Claude Code and for teams: undo any change Claude made, secret shields, project fence, destructive-command guard, enforced team policies, audit log with CSV export, Slack/Teams/Telegram alerts, token budget, review mode and reports. Available in 25 languages.",
   "license": "MIT",
+  "homepage": "https://khfagy.com",
+  "author": { "name": "khfagy", "email": "hello@khfagy.com", "url": "https://khfagy.com" },
   "keywords": ["security", "secrets", "guardrails", "undo", "audit", "team-policy", "review-mode", "i18n"],
   "types": "./types/index.d.ts",
   "userConfig": {
