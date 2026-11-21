@@ -1,21 +1,31 @@
 import { atom, read, update } from 'claude-code'
 import type { Register, ThemeSetArgs } from 'claude-code'
 
-import type { Activity, TurnSummary } from '../types'
-import { isDestructive, isSecretFile } from './guards.js'
+import type { Activity, SessionTotals, TurnSummary } from '../types'
+import { findSecret, isDestructive, isSecretFile, parseList } from './guards.js'
 import type { Lang } from './i18n.js'
 import { strings } from './i18n.js'
 import { makeColors } from './make-colors.js'
+import type { DayStats } from './stats.js'
+import { addDay, asDay, dayKey, emptyDay, formatDuration, formatTokens, tokensIn, tokensOut, topTools } from './stats.js'
 
 const PANE = 'khfagy-activity'
+const DAY_MS = 24 * 60 * 60 * 1000
+const CHANGING_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'Bash', 'PowerShell'])
 
 const activity = atom({ plugin: 'khfagy', key: 'activity' } as const, [], { shape: 'activity-1' })
-const lastTurn = atom({ plugin: 'khfagy', key: 'lastTurn' } as const, null)
+const turns = atom({ plugin: 'khfagy', key: 'turns' } as const, [], { shape: 'turns-2' })
+const totals = atom(
+  { plugin: 'khfagy', key: 'totals' } as const,
+  { turns: 0, tools: 0, failed: 0, blocked: 0, tokensIn: 0, tokensOut: 0 },
+  { shape: 'totals-2' },
+)
 const isBandHidden = atom({ plugin: 'khfagy', key: 'isBandHidden' } as const, false)
+const isLocked = atom({ plugin: 'khfagy', key: 'isLocked' } as const, false)
 
 // Bright navy: sea spray by day, lit harbour by night.
 const { theme, problems } = makeColors({
-  label: 'Khfagy',
+  label: 'khfagy',
   roles: { accent: '#1e88e5', danger: '#e53935', success: '#1fa774', warning: '#f0a020', pro: '#7c5cff' },
   light: {
     gray: {
@@ -55,7 +65,7 @@ const ICON: Record<Activity['status'], string> = {
 const short = (text: string, max = 48) => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
 const detailOf = (e: { readonly [key: string]: unknown }): string => {
-  for (const key of ['file_path', 'command', 'pattern', 'url', 'description', 'query']) {
+  for (const key of ['file_path', 'notebook_path', 'command', 'pattern', 'url', 'description', 'query']) {
     const value = e[key]
     if (typeof value === 'string' && value.length > 0) {
       return short(value.replace(/\s+/g, ' '))
@@ -64,26 +74,35 @@ const detailOf = (e: { readonly [key: string]: unknown }): string => {
   return ''
 }
 
+const pathOf = (e: { readonly [key: string]: unknown }): string | undefined => {
+  for (const key of ['file_path', 'notebook_path']) {
+    const value = e[key]
+    if (typeof value === 'string') {
+      return value
+    }
+  }
+  return undefined
+}
+
 export const register: Register = (on, options) => {
   const lang: Lang = options.language === 'ar' ? 'ar' : 'en'
   const t = strings(lang)
   const useTheme = options.theme !== false
   const guardSecrets = options.guardSecrets !== false
+  const guardReads = options.guardReads !== false
   const guardCommands = options.guardCommands !== false
+  const guardPrompts = options.guardPrompts !== false
+  const soundOnDone = options.soundOnDone !== false
   const slowAfter = typeof options.slowTurnSeconds === 'number' ? options.slowTurnSeconds : 120
+  const extraFiles = parseList(options.protectedPaths)
+  const extraCommands = parseList(options.blockedCommands)
 
-  let total = 0
-  let failed = 0
-  let turnStart = 0
-  let turnTools = 0
-  let turnFailed = 0
+  // This turn, in memory; written to the store when the turn ends.
+  let turn: DayStats = emptyDay()
 
   on('session.start', async ($, e, next) => {
-    if (useTheme) {
-      const unpainted = problems.find(line => line.startsWith("Desktop won't paint"))
-      if (unpainted === undefined) {
-        await $.theme.set(LOOK)
-      }
+    if (useTheme && problems.every(line => !line.startsWith("Desktop won't paint"))) {
+      await $.theme.set(LOOK)
     }
     await $.command.register({ name: 'khfagy', description: t.commandDesc })
     $.ui.toast(t.ready)
@@ -91,115 +110,256 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  on('command.run', { command: 'khfagy' }, async $ => {
+  // ---- Commands ----
+  on('command.run', { command: 'khfagy' }, async ($, e) => {
+    const arg = e.args.trim().toLowerCase()
+
+    if (arg === 'report') {
+      const s = await read($, totals)
+      const now = await $.clock.now()
+      const today = addDay(asDay(await $.store.get(dayKey(now))), turn)
+      const top = topTools(today.byTool)
+      return {
+        text: [
+          `${t.report}`,
+          '',
+          `${t.thisSession}`,
+          `  ${t.rowTurns}: ${s.turns}`,
+          `  ${t.rowTools}: ${s.tools}`,
+          `  ${t.rowFailed}: ${s.failed}`,
+          `  ${t.rowBlocked}: ${s.blocked}`,
+          `  ${t.rowTokens}: ${formatTokens(s.tokensIn)} / ${formatTokens(s.tokensOut)}`,
+          '',
+          `${t.today}`,
+          `  ${t.rowTurns}: ${today.turns}`,
+          `  ${t.rowTools}: ${today.tools}`,
+          `  ${t.rowFailed}: ${today.failed}`,
+          `  ${t.rowBlocked}: ${today.blocked}`,
+          `  ${t.rowTime}: ${formatDuration(today.seconds)}`,
+          `  ${t.rowTokens}: ${formatTokens(today.tokensIn)} / ${formatTokens(today.tokensOut)}`,
+          `  ${t.topTools}: ${top.length > 0 ? top.map(([k, v]) => `${k} ${v}`).join(', ') : t.none}`,
+        ].join('\n'),
+      }
+    }
+    if (arg === 'help') {
+      return { text: t.help }
+    }
+    if (arg === 'lock') {
+      await update($, isLocked, () => true)
+      $.ui.toast(t.locked)
+      return { text: t.locked }
+    }
+    if (arg === 'unlock') {
+      await update($, isLocked, () => false)
+      return { text: t.unlocked }
+    }
+    if (arg === 'stats') {
+      const now = await $.clock.now()
+      let week = emptyDay()
+      const lines: string[] = []
+      for (let i = 6; i >= 0; i--) {
+        const key = dayKey(now - i * DAY_MS)
+        const day = i === 0 ? addDay(asDay(await $.store.get(key)), turn) : asDay(await $.store.get(key))
+        week = addDay(week, day)
+        lines.push(
+          `  ${key.slice(4)}  ${day.turns} · ${day.tools} · ${formatDuration(day.seconds)} · ${formatTokens(day.tokensIn + day.tokensOut)}`,
+        )
+      }
+      const top = topTools(week.byTool)
+      return {
+        text: [
+          `${t.report} · ${t.week}`,
+          `  ${t.rowTurns} · ${t.rowTools} · ${t.rowTime} · ${t.rowTokens}`,
+          ...lines,
+          '',
+          `${t.rowTurns}: ${week.turns}  ${t.rowTools}: ${week.tools}  ${t.rowFailed}: ${week.failed}  ${t.rowBlocked}: ${week.blocked}`,
+          `${t.rowTime}: ${formatDuration(week.seconds)}`,
+          `${t.rowTokens}: ${formatTokens(week.tokensIn)} / ${formatTokens(week.tokensOut)}`,
+          `${t.topTools}: ${top.length > 0 ? top.map(([k, v]) => `${k} ${v}`).join(', ') : t.none}`,
+        ].join('\n'),
+      }
+    }
+
     const opened = await $.ui.open({ id: PANE, title: t.paneTitle })
     return { text: opened.isPlaced ? t.opened : t.noPane }
   })
 
-  // ---- Guardrails ----
-  on('tool.call', { tool: 'Edit' }, ($, e, next) => {
-    if (guardSecrets && isSecretFile(e.file_path)) {
-      $.ui.toast(t.blockedFile(e.file_path))
-      return { deny: `khfagy: ${e.file_path} is a protected secret file.` }
+  // ---- Prompt shield (never send a key to the model) and turn start ----
+  on('prompt.submit', async ($, e, next) => {
+    if (guardPrompts && e.command === undefined) {
+      const kind = findSecret(e.text)
+      if (kind !== undefined) {
+        $.ui.toast(t.blockedPrompt(kind))
+        return { drop: t.blockedPrompt(kind) }
+      }
     }
-    return next(e)
-  }).catch(($, e, next) => (next.called ? next(e) : { deny: t.guardFailed }))
-
-  on('tool.call', { tool: 'Write' }, ($, e, next) => {
-    if (guardSecrets && isSecretFile(e.file_path)) {
-      $.ui.toast(t.blockedFile(e.file_path))
-      return { deny: `khfagy: ${e.file_path} is a protected secret file.` }
-    }
-    return next(e)
-  }).catch(($, e, next) => (next.called ? next(e) : { deny: t.guardFailed }))
-
-  on('tool.call', { tool: 'Bash' }, ($, e, next) => {
-    if (guardCommands && isDestructive(e.command)) {
-      $.ui.toast(t.blockedCmd(short(e.command)))
-      return { deny: `khfagy: blocked a destructive command: ${e.command}` }
-    }
-    return next(e)
-  }).catch(($, e, next) => (next.called ? next(e) : { deny: t.guardFailed }))
-
-  on('tool.call', { tool: 'PowerShell' }, ($, e, next) => {
-    if (guardCommands && isDestructive(e.command)) {
-      $.ui.toast(t.blockedCmd(short(e.command)))
-      return { deny: `khfagy: blocked a destructive command: ${e.command}` }
-    }
-    return next(e)
-  }).catch(($, e, next) => (next.called ? next(e) : { deny: t.guardFailed }))
-
-  // ---- Activity log ----
-  on('tool.call', async ($, e, next) => {
-    const started = await $.clock.now()
-    const item: Activity = { id: e.tool_use_id, tool: e.tool, detail: detailOf(e), status: 'running', ms: 0 }
-    await update($, activity, list => [...list, item].slice(-300))
-
     const ran = await next(e)
-    const status: Activity['status'] =
-      ran.deny !== undefined ? 'blocked' : ran.isError === true ? 'failed' : 'done'
-    const ms = (await $.clock.now()) - started
-
-    total += 1
-    turnTools += 1
-    if (status === 'failed' || status === 'blocked') {
-      failed += 1
-      turnFailed += 1
+    if (ran.drop === undefined && e.turnId === undefined) {
+      turn = emptyDay()
     }
+    return ran
+  }).catch(($, e, next) => (next.called ? next(e) : { drop: t.guardFailed }))
+
+  // ---- Guardrails on tool calls ----
+  on('tool.call', async ($, e, next) => {
+    const path = pathOf(e)
+
+    let reason: string | undefined
+    if ((await read($, isLocked)) && CHANGING_TOOLS.has(e.tool)) {
+      reason = t.blockedLocked(e.tool)
+    } else if (path !== undefined && isSecretFile(path, extraFiles)) {
+      if (guardSecrets && (e.tool === 'Edit' || e.tool === 'Write' || e.tool === 'NotebookEdit')) {
+        reason = t.blockedFile(path)
+      } else if (guardReads && e.tool === 'Read') {
+        reason = t.blockedRead(path)
+      }
+    } else if (guardCommands && (e.tool === 'Bash' || e.tool === 'PowerShell')) {
+      const command = (e as { readonly command?: unknown }).command
+      if (typeof command === 'string' && isDestructive(command, extraCommands)) {
+        reason = t.blockedCmd(short(command))
+      }
+    }
+    const denied = reason === undefined ? undefined : { deny: `khfagy: ${reason}` }
+    if (reason !== undefined) {
+      $.ui.toast(reason)
+    }
+
+    // Activity log: a logging failure never blocks or breaks the call.
+    const item: Activity = { id: e.tool_use_id, tool: e.tool, detail: detailOf(e), status: 'running', ms: 0 }
+    let started = 0
+    try {
+      started = await $.clock.now()
+      await update($, activity, list => [...list, item].slice(-300))
+    } catch {
+      // keep going
+    }
+
+    const ran = denied ?? (await next(e))
+    const status: Activity['status'] =
+      ran.deny !== undefined ? 'blocked' : 'isError' in ran && ran.isError === true ? 'failed' : 'done'
+
+    try {
+    const ms = started > 0 ? (await $.clock.now()) - started : 0
+
+    turn = {
+      ...turn,
+      tools: turn.tools + 1,
+      failed: turn.failed + (status === 'failed' ? 1 : 0),
+      blocked: turn.blocked + (status === 'blocked' ? 1 : 0),
+      byTool: { ...turn.byTool, [e.tool]: (turn.byTool[e.tool] ?? 0) + 1 },
+    }
+    const s = await update($, totals, x => ({
+      ...x,
+      tools: x.tools + 1,
+      failed: x.failed + (status === 'failed' ? 1 : 0),
+      blocked: x.blocked + (status === 'blocked' ? 1 : 0),
+    }))
     await update($, activity, list => list.map(one => (one.id === item.id ? { ...one, status, ms } : one)))
-    $.ui.status(t.status(total, failed))
+    $.ui.status(t.status(s.tools, s.failed + s.blocked))
+    } catch {
+      // keep going
+    }
 
     return ran
-  })
-
-  // ---- Turn summary ----
-  on('prompt.submit', async ($, e, next) => {
-    turnStart = await $.clock.now()
-    turnTools = 0
-    turnFailed = 0
-    return next(e)
-  })
+  }).catch(($, e, next) => (next.called ? next(e) : { deny: t.guardFailed }))
 
   on('turn.complete', async ($, e, next) => {
-    const seconds = Math.round(((await $.clock.now()) - turnStart) / 1000)
-    const summary: TurnSummary = { seconds, tools: turnTools, failed: turnFailed }
-    await update($, lastTurn, () => summary)
+    // A subagent's run ends too; count only the main conversation's turns.
+    if (e.agentId !== undefined) {
+      return next(e)
+    }
+    const now = await $.clock.now()
+    const seconds = Math.round(e.durationMs / 1000)
+    const inTok = tokensIn(e.usage)
+    const outTok = tokensOut(e.usage)
+    const s = await update($, totals, x => ({
+      ...x,
+      turns: x.turns + 1,
+      tokensIn: x.tokensIn + inTok,
+      tokensOut: x.tokensOut + outTok,
+    }))
+    const summary: TurnSummary = { n: s.turns, seconds, tools: turn.tools, failed: turn.failed, tokens: inTok + outTok }
+    await update($, turns, list => [...list, summary].slice(-20))
+
+    const key = dayKey(now)
+    await $.store.set(
+      key,
+      addDay(asDay(await $.store.get(key)), { ...turn, turns: 1, seconds, tokensIn: inTok, tokensOut: outTok }),
+    )
+    turn = emptyDay()
+
     if (slowAfter > 0 && seconds > slowAfter) {
-      $.ui.toast(t.slow(seconds))
+      $.ui.toast(t.slow(formatDuration(seconds)))
+    }
+    if (soundOnDone && seconds >= 15) {
+      void $.audio.play({ asset: 'sounds/done.wav' }).catch(() => undefined)
     }
     return next(e)
   })
 
+  // ---- Band above the prompt ----
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const turn = await read($, lastTurn)
-    if (e.props.hasSurvey || turn === null || (await read($, isBandHidden))) {
+    if (e.props.hasSurvey) {
       return next(e)
     }
     const { Box, Button, Text } = $.ui.resolve(e)
 
+    if (await read($, isLocked)) {
+      return (
+        <Box>
+          <Text color="yellow">{t.lockedBand} </Text>
+          <Button key="khfagy-unlock" label={t.unlock} onPress={() => update($, isLocked, () => false)} />
+        </Box>
+      )
+    }
+
+    const list = await read($, turns)
+    const last = list[list.length - 1]
+    if (last === undefined || (await read($, isBandHidden))) {
+      return next(e)
+    }
     return (
       <Box>
-        <Text dimColor>{t.lastTurn(turn.seconds, turn.tools, turn.failed)} </Text>
+        <Text dimColor>{t.lastTurn(formatDuration(last.seconds), last.tools, last.failed)} </Text>
         <Button key="khfagy-hide" label={t.hide} onPress={() => update($, isBandHidden, () => true)} />
       </Box>
     )
   })
 
-  // ---- Activity pane ----
+  // ---- Pane ----
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     const list = await read($, activity)
-    const room = Math.max(1, (e.viewport?.rows ?? 24) - 4)
+    const history = await read($, turns)
+    const s: SessionTotals = await read($, totals)
+    const locked = await read($, isLocked)
+    const rows = e.viewport?.rows ?? 24
+    const turnRows = history.slice(-5).reverse()
+    const room = Math.max(1, rows - 8 - turnRows.length)
 
     return (
       <Box flexDirection="column">
+        <Text bold>
+          {t.sessionLine(s.turns, s.tools, s.failed, s.blocked, formatTokens(s.tokensIn + s.tokensOut))}
+        </Text>
+        {locked && <Text color="yellow">{t.lockedBand}</Text>}
+        <Text> </Text>
+        <Text bold>{t.sectionActivity}</Text>
         {list.length === 0 && <Text dimColor>{t.paneEmpty}</Text>}
         {list.slice(-room).map(item => (
-          <Text dimColor={item.status === 'done'} color={item.status === 'done' || item.status === 'running' ? undefined : 'red'}>
+          <Text
+            dimColor={item.status === 'done'}
+            color={item.status === 'done' || item.status === 'running' ? undefined : 'red'}
+          >
             {ICON[item.status]} {item.tool}
             {item.detail ? ` · ${item.detail}` : ''}
             {item.status === 'running' ? '' : ` · ${(item.ms / 1000).toFixed(1)}s`}
           </Text>
+        ))}
+        {turnRows.length > 0 && <Text> </Text>}
+        {turnRows.length > 0 && <Text bold>{t.sectionTurns}</Text>}
+        {turnRows.map(x => (
+          <Text dimColor>{t.turnLine(x.n, formatDuration(x.seconds), x.tools, x.failed, formatTokens(x.tokens))}</Text>
         ))}
       </Box>
     )

@@ -6,14 +6,25 @@ export type Activity = {
   ms: number
 }
 
-export type TurnSummary = { seconds: number; tools: number; failed: number }
+export type TurnSummary = { n: number; seconds: number; tools: number; failed: number; tokens: number }
+
+export type SessionTotals = {
+  turns: number
+  tools: number
+  failed: number
+  blocked: number
+  tokensIn: number
+  tokensOut: number
+}
 
 declare module 'claude-code' {
   interface PluginState {
     khfagy: {
       activity: Shaped<Activity[]>
-      lastTurn: TurnSummary | null
+      turns: Shaped<TurnSummary[]>
+      totals: Shaped<SessionTotals>
       isBandHidden: boolean
+      isLocked: boolean
     }
   }
 }

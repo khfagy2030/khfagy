@@ -1,9 +1,9 @@
 {
   "name": "khfagy",
-  "version": "1.0.0",
-  "description": "A bright navy session HUD for Claude Code: live activity pane, turn summary, status line, alerts and guardrails for secrets and destructive commands. English and Arabic.",
+  "version": "2.0.0",
+  "description": "A pro safety and insight layer for Claude Code: secret shield for prompts and files, destructive-command guard, review mode, live activity pane, turn history, daily and weekly stats, done sound and a bright navy theme. English and Arabic.",
   "license": "MIT",
-  "keywords": ["hud", "theme", "activity", "guardrails", "status-line", "arabic", "i18n"],
+  "keywords": ["security", "secrets", "guardrails", "review-mode", "activity", "stats", "theme", "arabic", "i18n"],
   "types": "./types/index.d.ts",
   "userConfig": {
     "language": {
@@ -19,16 +19,46 @@
       "description": "Apply the bright navy look in the desktop and mobile apps",
       "default": true
     },
+    "guardPrompts": {
+      "type": "boolean",
+      "title": "Scan prompts for secrets",
+      "description": "Stop a message from being sent when it contains an API key, token or private key",
+      "default": true
+    },
     "guardSecrets": {
       "type": "boolean",
-      "title": "Protect secret files",
+      "title": "Protect secret files from edits",
       "description": "Block edits to .env files, private keys and credential files",
+      "default": true
+    },
+    "guardReads": {
+      "type": "boolean",
+      "title": "Protect secret files from reading",
+      "description": "Block Claude from reading .env files, private keys and credential files",
       "default": true
     },
     "guardCommands": {
       "type": "boolean",
       "title": "Block destructive commands",
-      "description": "Block rm -rf on the root or home folder and force pushes",
+      "description": "Block rm -rf on root or home, force pushes, disk wipes and DROP DATABASE",
+      "default": true
+    },
+    "protectedPaths": {
+      "type": "string",
+      "title": "Extra protected files",
+      "description": "Comma-separated: a file name, a folder ending in /, or *.ext. Example: secrets/, *.sqlite, config/prod.json",
+      "default": ""
+    },
+    "blockedCommands": {
+      "type": "string",
+      "title": "Extra blocked commands",
+      "description": "Comma-separated text that blocks any shell command containing it. Example: terraform destroy, kubectl delete",
+      "default": ""
+    },
+    "soundOnDone": {
+      "type": "boolean",
+      "title": "Sound when a long turn finishes",
+      "description": "Play a short chime when a turn of 15 seconds or more ends",
       "default": true
     },
     "slowTurnSeconds": {
