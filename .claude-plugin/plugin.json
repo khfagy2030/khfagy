@@ -1,11 +1,27 @@
 {
   "name": "khfagy",
-  "version": "2.3.0",
-  "description": "The safety net for Claude Code and for teams: undo any change Claude made, secret shields, project fence, destructive-command guard, enforced team policies, audit log with CSV export, Slack/Teams/Telegram alerts, token budget, review mode and reports. Available in 25 languages.",
+  "version": "3.0.0",
+  "description": "The safety net for Claude Code and for teams: rewind a whole turn or undo any change, prompt-injection shield, secret check before git commit and push, fake package guard, secret shields, project fence, destructive-command guard, enforced team policies, audit log, alerts, token budget and reports. Available in 25 languages.",
   "license": "MIT",
   "homepage": "https://khfagy.com",
-  "author": { "name": "khfagy", "email": "hello@khfagy.com", "url": "https://khfagy.com" },
-  "keywords": ["security", "secrets", "guardrails", "undo", "audit", "team-policy", "review-mode", "i18n"],
+  "author": {
+    "name": "khfagy",
+    "email": "hello@khfagy.com",
+    "url": "https://khfagy.com"
+  },
+  "keywords": [
+    "security",
+    "secrets",
+    "guardrails",
+    "undo",
+    "audit",
+    "team-policy",
+    "review-mode",
+    "i18n",
+    "prompt-injection",
+    "supply-chain",
+    "git"
+  ],
   "types": "./types/index.d.ts",
   "userConfig": {
     "language": {
@@ -13,7 +29,33 @@
       "title": "Language",
       "description": "Interface language: en, zh, hi, es, ar, fr, bn, pt, ru, ur, id, de, ja, tr, ko, vi, it, fa, th, pl, nl, uk, ms, ta, sw",
       "default": "en",
-      "options": ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "ru", "ur", "id", "de", "ja", "tr", "ko", "vi", "it", "fa", "th", "pl", "nl", "uk", "ms", "ta", "sw"]
+      "options": [
+        "en",
+        "zh",
+        "hi",
+        "es",
+        "ar",
+        "fr",
+        "bn",
+        "pt",
+        "ru",
+        "ur",
+        "id",
+        "de",
+        "ja",
+        "tr",
+        "ko",
+        "vi",
+        "it",
+        "fa",
+        "th",
+        "pl",
+        "nl",
+        "uk",
+        "ms",
+        "ta",
+        "sw"
+      ]
     },
     "theme": {
       "type": "boolean",
@@ -44,6 +86,30 @@
       "title": "Block destructive commands",
       "description": "Block rm -rf on root or home, force pushes, disk wipes and DROP DATABASE",
       "default": true
+    },
+    "guardInjection": {
+      "type": "boolean",
+      "title": "Prompt-injection shield",
+      "description": "Warn Claude and you when a page, file or command output hides instructions aimed at the AI",
+      "default": true
+    },
+    "guardGitSecrets": {
+      "type": "boolean",
+      "title": "Secret check before git",
+      "description": "Block git commit and git push when they would send a secret file or a key",
+      "default": true
+    },
+    "guardPackages": {
+      "type": "boolean",
+      "title": "Fake package guard",
+      "description": "Block installing npm or pip packages whose names imitate popular ones (typosquatting)",
+      "default": true
+    },
+    "allowedPackages": {
+      "type": "string",
+      "title": "Allowed packages",
+      "description": "Comma-separated package names the fake package guard should always allow",
+      "default": ""
     },
     "protectedPaths": {
       "type": "string",

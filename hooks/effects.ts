@@ -2,6 +2,9 @@ import type { EngineInterface } from 'claude-code'
 
 import type { AuditEvent, Policy } from './policy.js'
 import { alertRequest, parseAuditLines, parsePolicy, POLICY_FILE, toCsv } from './policy.js'
+import { findSecret, isSecretFile } from './guards.js'
+import type { GitAction } from './shields.js'
+import { addedLines } from './shields.js'
 
 /** The project's team policy, or undefined when there is none or it is broken. */
 export async function loadPolicy($: EngineInterface, root: string): Promise<Policy | undefined> {
@@ -76,4 +79,60 @@ export async function sendAlert($: EngineInterface, url: string, text: string, e
   } catch {
     return false
   }
+}
+
+/** What a git commit or push is about to send that it should not: a secret file, or a key in an added line. */
+export async function scanGit(
+  $: EngineInterface,
+  g: GitAction,
+  root: string,
+  extraFiles: readonly string[],
+): Promise<{ file?: string; kind?: string } | undefined> {
+  const git = async (...args: string[]) => {
+    try {
+      const r = await $.process.run(['git', ...args], { cwd: root === '' ? undefined : root, timeoutMs: 15_000 })
+      return r.exitCode === 0 ? r.stdout : ''
+    } catch {
+      return ''
+    }
+  }
+  const lines = (text: string) =>
+    text
+      .split('\n')
+      .map(x => x.trim())
+      .filter(x => x !== '')
+  let names: string[]
+  let diff: string
+  if (g.kind === 'push') {
+    names = lines(await git('log', '--name-only', '--format=', 'HEAD', '--not', '--remotes'))
+    diff = await git('log', '-p', '--format=', 'HEAD', '--not', '--remotes')
+  } else {
+    names = lines(await git('diff', '--cached', '--name-only'))
+    diff = await git('diff', '--cached')
+    if (g.addsFirst) {
+      names = [...names, ...lines(await git('diff', 'HEAD', '--name-only'))]
+      diff += await git('diff', 'HEAD')
+      const fresh = lines(await git('ls-files', '--others', '--exclude-standard'))
+      names = [...names, ...fresh]
+      for (const name of fresh.slice(0, 40)) {
+        try {
+          const file = `${root.replace(/[\\/]+$/, '')}/${name}`
+          if ((await $.fs.stat(file)).size <= 256 * 1024) {
+            diff += `\n${(await $.fs.read(file))
+              .split('\n')
+              .map(x => `+${x}`)
+              .join('\n')}`
+          }
+        } catch {
+          // an unreadable file is skipped
+        }
+      }
+    }
+  }
+  const file = names.find(n => isSecretFile(n, extraFiles))
+  if (file !== undefined) {
+    return { file }
+  }
+  const kind = findSecret(addedLines(diff))
+  return kind === undefined ? undefined : { kind }
 }

@@ -25,6 +25,8 @@ export type Snapshot = {
   file: string
   at: number
   isRestored: boolean
+  /** The turn of the session the change belongs to (for /khfagy rewind). */
+  turn?: number
 }
 
 declare module 'claude-code' {

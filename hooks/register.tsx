@@ -2,11 +2,12 @@ import { atom, read, update } from 'claude-code'
 import type { Register, ThemeSetArgs } from 'claude-code'
 
 import type { Activity, SessionTotals, Snapshot, TurnSummary } from '../types'
-import { exportAudit, loadPolicy, resolveSecretRef, sendAlert, writeAudit } from './effects.js'
+import { exportAudit, loadPolicy, resolveSecretRef, scanGit, sendAlert, writeAudit } from './effects.js'
 import { historyDir, isAllowedPlace } from './fence.js'
 import type { AuditEvent, Policy } from './policy.js'
 import { POLICY_FILE } from './policy.js'
 import { findSecret, isDestructive, isSecretFile, parseList } from './guards.js'
+import { addedLines, findInjection, gitAction, installsIn, lookalikeOf } from './shields.js'
 import type { Lang } from './i18n.js'
 import { isLang, strings } from './i18n.js'
 import { makeColors } from './make-colors.js'
@@ -104,6 +105,10 @@ export const register: Register = (on, options) => {
   let guardOutputs = options.guardOutputs !== false
   let guardFence = options.guardProjectFence !== false
   let keepHistory = options.timeMachine !== false
+  let guardInjection = options.guardInjection !== false
+  let guardGitSecrets = options.guardGitSecrets !== false
+  let guardPackages = options.guardPackages !== false
+  const allowedPackages = new Set(parseList(options.allowedPackages).map(x => x.toLowerCase()))
   let extraFiles = parseList(options.protectedPaths)
   let extraCommands = parseList(options.blockedCommands)
   let allowedPlaces = parseList(options.allowedPaths)
@@ -176,6 +181,9 @@ export const register: Register = (on, options) => {
       guardOutputs ||= p.enforce.guardOutputs
       guardFence ||= p.enforce.guardProjectFence
       keepHistory ||= p.enforce.timeMachine
+      guardInjection ||= p.enforce.guardInjection
+      guardGitSecrets ||= p.enforce.guardGitSecrets
+      guardPackages ||= p.enforce.guardPackages
       extraFiles = [...extraFiles, ...p.protectedPaths]
       extraCommands = [...extraCommands, ...p.blockedCommands]
       allowedPlaces = [...allowedPlaces, ...p.allowedPaths]
@@ -290,6 +298,36 @@ export const register: Register = (on, options) => {
           t.historyHint,
         ].join('\n'),
       }
+    }
+    if (arg === 'rewind') {
+      const open = (await read($, history)).filter(x => !x.isRestored && x.turn !== undefined)
+      if (open.length === 0) {
+        return { text: t.rewindNothing }
+      }
+      const last = Math.max(...open.map(x => x.turn ?? 0))
+      const ofTurn = open.filter(x => x.turn === last).sort((a, b) => a.seq - b.seq)
+      const first = new Map<string, Snapshot>()
+      for (const snap of ofTurn) {
+        const key = snap.path.replace(/\\/g, '/').toLowerCase()
+        if (!first.has(key)) {
+          first.set(key, snap)
+        }
+      }
+      let restored = 0
+      const created: string[] = []
+      for (const snap of first.values()) {
+        if (snap.existed) {
+          await $.fs.write(snap.path, await $.fs.read(snap.file))
+          restored++
+        } else {
+          created.push(snap.path)
+        }
+      }
+      const done = new Set(ofTurn.map(x => x.seq))
+      await update($, history, all => all.map(x => (done.has(x.seq) ? { ...x, isRestored: true } : x)))
+      note(await $.clock.now(), 'rewind', { reason: `turn ${last}: ${restored} restored, ${created.length} created` })
+      $.ui.toast(t.rewound(restored, []))
+      return { text: t.rewound(restored, created) }
     }
     if (arg === 'undo' || arg.startsWith('undo ')) {
       const list = await read($, history)
@@ -422,6 +460,28 @@ export const register: Register = (on, options) => {
         reason = t.blockedPolicyFile
       }
     }
+    if (reason === undefined && (e.tool === 'Bash' || e.tool === 'PowerShell')) {
+      const command = (e as { readonly command?: unknown }).command
+      if (typeof command === 'string') {
+        if (guardPackages) {
+          for (const install of installsIn(command)) {
+            for (const name of install.names) {
+              const top = allowedPackages.has(name) ? undefined : lookalikeOf(name, install.eco)
+              if (top !== undefined && reason === undefined) {
+                reason = t.blockedPackage(name, top)
+              }
+            }
+          }
+        }
+        const g = reason === undefined && guardGitSecrets ? gitAction(command) : undefined
+        if (g !== undefined) {
+          const leak = await scanGit($, g, projectRoot ?? '', extraFiles)
+          if (leak !== undefined) {
+            reason = t.blockedGit(g.kind, leak.file !== undefined ? t.gitSecretFile(leak.file) : t.gitSecretKey(leak.kind ?? ''))
+          }
+        }
+      }
+    }
     if (reason === undefined && guardFence && isChange && path !== undefined) {
       if (!isAllowedPlace(path, projectRoot, allowedPlaces)) {
         reason = t.blockedFence(path)
@@ -441,7 +501,8 @@ export const register: Register = (on, options) => {
           const seq = (await read($, history)).reduce((m, x) => Math.max(m, x.seq), 0) + 1
           const file = `${histDir}/${seq}.snap`
           await $.fs.write(file, existed ? await $.fs.read(path) : '')
-          const snap: Snapshot = { seq, path, tool: e.tool, existed, file, at: await $.clock.now(), isRestored: false }
+          const turnNo = (await read($, totals)).turns + 1
+          const snap: Snapshot = { seq, path, tool: e.tool, existed, file, at: await $.clock.now(), isRestored: false, turn: turnNo }
           await update($, history, list => [...list, snap].slice(-200))
         }
       } catch {
@@ -467,6 +528,24 @@ export const register: Register = (on, options) => {
       if (kind !== undefined) {
         $.ui.toast(t.withheldOutput(e.tool, kind))
         ran = { deny: `khfagy: ${t.withheldOutput(e.tool, kind)}` }
+      }
+    }
+
+    // Prompt-injection shield: orders hidden in a page, file or command output are flagged to Claude as untrusted.
+    if (guardInjection && ran.deny === undefined && typeof ran.text === 'string' && !isChange) {
+      const quote = findInjection(ran.text)
+      if (quote !== undefined) {
+        $.ui.toast(t.injectionFound(e.tool, quote))
+        ran = { ...ran, context: [...(ran.context ?? []), t.injectionContext(e.tool, quote)] }
+        try {
+          const at = await $.clock.now()
+          note(at, 'warned.injection', { tool: e.tool, target: detailOf(e), status: 'warned', reason: quote })
+          if (shouldAlert('injection', at)) {
+            void sendAlert($, alertUrl, t.alert(user, projectRoot ?? '', t.injectionFound(e.tool, quote)), 'warned.injection')
+          }
+        } catch {
+          // keep going
+        }
       }
     }
 

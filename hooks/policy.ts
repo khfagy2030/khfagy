@@ -13,6 +13,9 @@ export type Policy = {
     guardOutputs: boolean
     guardProjectFence: boolean
     timeMachine: boolean
+    guardInjection: boolean
+    guardGitSecrets: boolean
+    guardPackages: boolean
   }
   protectedPaths: string[]
   blockedCommands: string[]
@@ -49,6 +52,9 @@ export const parsePolicy = (raw: unknown): Policy | undefined => {
       guardOutputs: bool(enforce.guardOutputs),
       guardProjectFence: bool(enforce.guardProjectFence),
       timeMachine: bool(enforce.timeMachine),
+      guardInjection: bool(enforce.guardInjection),
+      guardGitSecrets: bool(enforce.guardGitSecrets),
+      guardPackages: bool(enforce.guardPackages),
     },
     protectedPaths: strings(r.protectedPaths),
     blockedCommands: strings(r.blockedCommands),
